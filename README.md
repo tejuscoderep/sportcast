@@ -1,33 +1,74 @@
-# sportcast
+# SportCast - Live Streaming Director
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+A sports broadcasting dashboard for directing multi-camera live streams with cricket score overlays.
 
-## Built with v0
+## Tech Stack
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
-
-[Continue working on v0 →](https://v0.app/chat/projects/prj_AASbT6SZP1QYkBA07w3Yd1c44kZ3)
+- Next.js 16.2 (App Router)
+- TypeScript
+- Tailwind CSS + shadcn/ui
+- Zustand (state management)
+- TanStack React Query
+- LiveKit Client SDK
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000 for the director dashboard or http://localhost:3000/camera for the mobile camera page.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-## Learn More
+Copy `.env.local` and fill in your LiveKit credentials:
 
-To learn more, take a look at the following resources:
+```env
+NEXT_PUBLIC_LIVEKIT_URL=wss://your-livekit-server.livekit.cloud
+NEXT_PUBLIC_LIVEKIT_API_KEY=your-api-key
+NEXT_PUBLIC_LIVEKIT_API_SECRET=your-api-secret
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
+The app works with mock data without LiveKit configured — cameras are simulated and scores update every 5 seconds.
+
+## Architecture
+
+### Routes
+
+| Route | Purpose |
+|-------|---------|
+| `/` | Director dashboard with match info, program feed, camera management, and broadcast controls |
+| `/camera` | Mobile camera page for joining the broadcast room |
+
+### File Structure
+
+```
+/app              - Next.js App Router pages
+/components       - Shared UI components (shadcn/ui)
+/features         - Feature-based components (dashboard, score-overlay)
+/hooks            - Custom React hooks
+/lib              - Utilities and LiveKit integration
+/services         - Service abstractions (PlayHQ, Broadcast)
+/store            - Zustand state
+/types            - TypeScript type definitions
+```
+
+### Services
+
+- **ScoreProvider** (`/services/playhq.ts`) - Abstraction for match scoring data. Mock provider simulates live score updates. Replace with PlayHQ API integration.
+- **BroadcastService** (`/services/broadcast.ts`) - Abstraction for broadcasting. Mock provider simulates stream status. Add YouTube/Facebook RTMP by implementing the `BroadcastService` interface.
+- **LiveKit** (`/lib/livekit/index.ts`) - Room management, camera track publishing/subscribing.
+
+### State (Zustand)
+
+The director store manages: active camera, connected cameras, match data, overlay visibility, broadcast state, and LiveKit connection.
+
+### Key Features
+
+- Unlimited camera support with a default 3-camera layout
+- Dynamic camera grid that expands automatically
+- Live cricket score overlay on program feed
+- Simulated score updates every 5 seconds
+- Broadcast start/stop controls with stream health indicators
+- Mobile-responsive design

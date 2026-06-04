@@ -1,24 +1,18 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata } from 'next'
-import { Ubuntu, Ubuntu_Mono } from 'next/font/google'
+import { Ubuntu } from 'next/font/google'
+import { QueryProvider } from '@/components/providers/query-provider'
 import './globals.css'
 
-const ubuntu = Ubuntu({ 
+const ubuntu = Ubuntu({
   subsets: ['latin'],
   weight: ['300', '400', '500', '700'],
   display: 'swap',
 })
 
-const ubuntuMono = Ubuntu_Mono({
-  subsets: ['latin'],
-  weight: ['400', '700'],
-  display: 'swap',
-})
-
 export const metadata: Metadata = {
-  title: 'SportcastUI - Live Streaming Director',
-  description: 'Modern sports live streaming director dashboard',
-  generator: 'v0.app',
+  title: 'SportCast - Live Streaming Director',
+  description: 'Sports live streaming director dashboard with multi-camera control',
   icons: {
     icon: [
       {
@@ -46,7 +40,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark bg-background ${ubuntu.className}`}>
       <body className="antialiased min-h-screen">
-        {children}
+        <QueryProvider>
+          {children}
+        </QueryProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
