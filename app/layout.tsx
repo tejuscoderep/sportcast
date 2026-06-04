@@ -7,14 +7,12 @@ const ubuntu = Ubuntu({
   subsets: ['latin'],
   weight: ['300', '400', '500', '700'],
   display: 'swap',
-  variable: '--font-ubuntu',
 })
 
 const ubuntuMono = Ubuntu_Mono({
   subsets: ['latin'],
   weight: ['400', '700'],
   display: 'swap',
-  variable: '--font-ubuntu-mono',
 })
 
 export const metadata: Metadata = {
@@ -46,8 +44,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`dark bg-background ${ubuntu.variable} ${ubuntuMono.variable}`}>
-      <body className="font-sans antialiased min-h-screen">
+    <html lang="en" className={`dark bg-background ${ubuntu.className}`}>
+      <body className="antialiased min-h-screen">
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
