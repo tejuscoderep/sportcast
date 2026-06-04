@@ -32,10 +32,10 @@ export function VideoPreview() {
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                    <span className="text-sm font-bold text-white">{battingTeam.shortName}</span>
+                    <span className="text-sm font-medium tracking-tight text-white">{battingTeam.shortName}</span>
                   </div>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-bold text-white">{battingTeam.score}</span>
+                    <span className="text-2xl font-medium tracking-tight text-white">{battingTeam.score}</span>
                     <span className="text-lg text-zinc-400">/{battingTeam.wickets}</span>
                   </div>
                   <span className="text-sm text-zinc-400">

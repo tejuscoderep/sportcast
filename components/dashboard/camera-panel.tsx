@@ -28,7 +28,7 @@ export function CameraPanel() {
       <Card className="bg-card/50">
         <CardHeader className="pb-2 pt-3 px-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <CardTitle className="text-sm font-medium tracking-wide flex items-center gap-2">
               <Video className="w-4 h-4 text-blue-400" />
               Camera Control
             </CardTitle>
@@ -63,7 +63,7 @@ export function CameraPanel() {
                   <Camera className="w-5 h-5 text-zinc-600" />
                   {camera.isActive && (
                     <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
-                      <span className="text-xs font-bold text-blue-400">ON AIR</span>
+                      <span className="text-xs font-medium tracking-wide text-blue-400">ON AIR</span>
                     </div>
                   )}
                 </div>

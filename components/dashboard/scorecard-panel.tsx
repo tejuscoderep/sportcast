@@ -14,7 +14,7 @@ export function ScorecardPanel() {
       <Card className="border-emerald-500/30 bg-card/50">
         <CardHeader className="pb-2 pt-3 px-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold text-emerald-400">PlayHQ Live</CardTitle>
+            <CardTitle className="text-sm font-medium tracking-wide text-emerald-400">PlayHQ Live</CardTitle>
             <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50 text-xs">
               <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               LIVE
@@ -34,11 +34,11 @@ export function ScorecardPanel() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-lg font-bold text-foreground">{battingTeam.name}</p>
+                <p className="text-lg font-medium tracking-tight text-foreground">{battingTeam.name}</p>
                 <p className="text-xs text-muted-foreground">Batting</p>
               </div>
               <div className="text-right">
-                <p className="text-3xl font-bold text-foreground">
+                <p className="text-3xl font-medium tracking-tight text-foreground">
                   {battingTeam.score}
                   <span className="text-xl text-muted-foreground">/{battingTeam.wickets}</span>
                 </p>
@@ -117,7 +117,7 @@ export function ScorecardPanel() {
             {/* Partnership */}
             <div className="bg-secondary/50 rounded-lg p-3 mt-2">
               <p className="text-xs text-muted-foreground">Partnership</p>
-              <p className="text-lg font-semibold text-foreground">
+              <p className="text-lg font-medium tracking-tight text-foreground">
                 {partnership.runs} <span className="text-sm text-muted-foreground">({partnership.balls} balls)</span>
               </p>
             </div>
