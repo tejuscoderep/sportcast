@@ -1,11 +1,10 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata } from 'next'
-import { Open_Sans } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import './globals.css'
 
-const openSans = Open_Sans({ 
+const inter = Inter({ 
   subsets: ['latin'],
-  variable: '--font-open-sans',
   display: 'swap',
 })
 
@@ -38,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`dark bg-background ${openSans.className}`}>
+    <html lang="en" className={`dark bg-background ${inter.className}`}>
       <body className="antialiased min-h-screen">
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
