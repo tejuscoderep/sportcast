@@ -2,12 +2,13 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { CameraCard } from "./camera-card"
 import { useCameras } from "@/hooks/use-cameras"
-import { Video } from "lucide-react"
+import { Video, Plus } from "lucide-react"
 
 export function CameraPanel() {
-  const { cameras, activeCameraId, takeLive, previewCamera } = useCameras()
+  const { cameras, activeCameraId, takeLive, previewCamera, addNewCamera, removeCamera } = useCameras()
 
   return (
     <div className="flex flex-col gap-3 h-full">
@@ -26,7 +27,7 @@ export function CameraPanel() {
         </CardHeader>
       </Card>
 
-      {/* Camera Grid - adapts to camera count */}
+      {/* Camera Grid */}
       <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
         {cameras.map((camera) => (
           <CameraCard
@@ -35,8 +36,19 @@ export function CameraPanel() {
             isActive={camera.id === activeCameraId}
             onTakeLive={() => takeLive(camera.id)}
             onPreview={() => previewCamera(camera.id)}
+            onRemove={() => removeCamera(camera.id)}
           />
         ))}
+
+        {/* Add Camera Button */}
+        <Button
+          variant="outline"
+          className="w-full gap-2 border-dashed text-muted-foreground hover:text-foreground"
+          onClick={addNewCamera}
+        >
+          <Plus className="w-4 h-4" />
+          Add Camera
+        </Button>
       </div>
     </div>
   )

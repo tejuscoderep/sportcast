@@ -1,15 +1,18 @@
 import { create } from "zustand"
-import type { CameraDevice, MatchData, BroadcastState } from "@/types"
+import type { CameraDevice, MatchData, BroadcastState, LiveMatch } from "@/types"
 
 interface DirectorStore {
   // Camera state
   activeCameraId: string | null
   cameras: CameraDevice[]
   previewCameraId: string | null
+  nextCameraId: number
 
   // Match/Score state
   matchData: MatchData | null
   overlayVisible: boolean
+  matches: LiveMatch[]
+  selectedMatchId: string | null
 
   // Broadcast state
   broadcastState: BroadcastState
@@ -30,6 +33,8 @@ interface DirectorStore {
   setMatchData: (data: MatchData) => void
   toggleOverlay: () => void
   setOverlayVisible: (visible: boolean) => void
+  setMatches: (matches: LiveMatch[]) => void
+  setSelectedMatchId: (id: string) => void
 
   // Actions - Broadcast
   setBroadcastState: (state: Partial<BroadcastState>) => void
@@ -61,10 +66,13 @@ export const useDirectorStore = create<DirectorStore>((set) => ({
   activeCameraId: null,
   cameras: [],
   previewCameraId: null,
+  nextCameraId: 2,
 
   // Initial match state
   matchData: null,
   overlayVisible: true,
+  matches: [],
+  selectedMatchId: null,
 
   // Initial broadcast state
   broadcastState: initialBroadcastState,
@@ -83,13 +91,16 @@ export const useDirectorStore = create<DirectorStore>((set) => ({
       return {
         cameras,
         activeCameraId: state.activeCameraId ?? camera.id,
+        nextCameraId: state.nextCameraId + 1,
       }
     }),
 
   removeCamera: (cameraId) =>
     set((state) => ({
       cameras: state.cameras.filter((c) => c.id !== cameraId),
-      activeCameraId: state.activeCameraId === cameraId ? null : state.activeCameraId,
+      activeCameraId: state.activeCameraId === cameraId
+        ? (state.cameras.find((c) => c.id !== cameraId)?.id ?? null)
+        : state.activeCameraId,
       previewCameraId: state.previewCameraId === cameraId ? null : state.previewCameraId,
     })),
 
@@ -110,6 +121,15 @@ export const useDirectorStore = create<DirectorStore>((set) => ({
   setMatchData: (data) => set(() => ({ matchData: data })),
   toggleOverlay: () => set((state) => ({ overlayVisible: !state.overlayVisible })),
   setOverlayVisible: (visible) => set(() => ({ overlayVisible: visible })),
+  setMatches: (matches) => set(() => ({ matches })),
+  setSelectedMatchId: (id) =>
+    set((state) => {
+      const match = state.matches.find((m) => m.id === id)
+      return {
+        selectedMatchId: id,
+        matchData: match?.data ?? state.matchData,
+      }
+    }),
 
   // Broadcast actions
   setBroadcastState: (updates) =>

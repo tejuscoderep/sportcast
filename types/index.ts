@@ -13,6 +13,7 @@ export type CameraStatus = "connected" | "connecting" | "disconnected" | "error"
 
 // Score types
 export interface MatchData {
+  id: string
   homeTeam: string
   awayTeam: string
   homeScore: string
@@ -23,6 +24,12 @@ export interface MatchData {
   currentBowler: string
   competition: string
   venue: string
+}
+
+export interface LiveMatch {
+  id: string
+  label: string
+  data: MatchData
 }
 
 // Score provider interface

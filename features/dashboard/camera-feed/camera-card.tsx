@@ -9,6 +9,7 @@ import {
   BatteryMedium,
   Wifi,
   Radio,
+  X,
 } from "lucide-react"
 
 interface CameraCardProps {
@@ -16,9 +17,10 @@ interface CameraCardProps {
   isActive: boolean
   onTakeLive: () => void
   onPreview: () => void
+  onRemove: () => void
 }
 
-export function CameraCard({ camera, isActive, onTakeLive, onPreview }: CameraCardProps) {
+export function CameraCard({ camera, isActive, onTakeLive, onPreview, onRemove }: CameraCardProps) {
   const statusColor = {
     connected: "bg-emerald-400",
     connecting: "bg-amber-400",
@@ -70,9 +72,15 @@ export function CameraCard({ camera, isActive, onTakeLive, onPreview }: CameraCa
             </Badge>
           </div>
 
-          {/* Status dot */}
-          <div className="absolute top-1.5 right-1.5">
+          {/* Status dot & Remove */}
+          <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
             <span className={`w-2 h-2 rounded-full block ${statusColor[camera.status]}`} />
+            <button
+              className="w-4 h-4 rounded-full bg-black/60 flex items-center justify-center hover:bg-red-500/80 transition-colors"
+              onClick={(e) => { e.stopPropagation(); onRemove() }}
+            >
+              <X className="w-2.5 h-2.5 text-white" />
+            </button>
           </div>
         </div>
 

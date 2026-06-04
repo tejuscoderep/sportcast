@@ -5,12 +5,22 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useDirectorStore } from "@/store"
 import { Switch } from "@/components/ui/switch"
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select"
 import { Tv } from "lucide-react"
 
 export function MatchInfoPanel() {
   const matchData = useDirectorStore((s) => s.matchData)
   const overlayVisible = useDirectorStore((s) => s.overlayVisible)
   const toggleOverlay = useDirectorStore((s) => s.toggleOverlay)
+  const matches = useDirectorStore((s) => s.matches)
+  const selectedMatchId = useDirectorStore((s) => s.selectedMatchId)
+  const setSelectedMatchId = useDirectorStore((s) => s.setSelectedMatchId)
 
   if (!matchData) {
     return (
@@ -33,18 +43,37 @@ export function MatchInfoPanel() {
               PlayHQ Live
             </CardTitle>
             <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50 text-xs">
-              <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              LIVE
+              <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              CONNECTED
             </Badge>
           </div>
         </CardHeader>
-        <CardContent className="px-4 pb-3">
+        <CardContent className="px-4 pb-3 space-y-2">
           <p className="text-xs text-muted-foreground">{matchData.competition}</p>
           <p className="text-xs text-muted-foreground">{matchData.venue}</p>
+
+          {/* Match Selector */}
+          {matches.length > 0 && (
+            <div className="pt-1">
+              <label className="text-xs text-muted-foreground block mb-1">Select Match</label>
+              <Select value={selectedMatchId ?? ""} onValueChange={setSelectedMatchId}>
+                <SelectTrigger className="w-full text-xs h-7">
+                  <SelectValue placeholder="Choose a match" />
+                </SelectTrigger>
+                <SelectContent>
+                  {matches.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Match Details */}
+      {/* Match Details / Scorecard */}
       <Card className="flex-1 bg-card/50">
         <CardContent className="p-4 space-y-4">
           {/* Home Team */}
