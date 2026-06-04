@@ -38,8 +38,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`dark bg-background ${openSans.variable}`}>
-      <body className="font-sans antialiased min-h-screen">
+    <html lang="en" className={`dark bg-background ${openSans.className}`}>
+      <body className="antialiased min-h-screen">
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
