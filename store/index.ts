@@ -5,7 +5,14 @@ import type {
   PlayHQConnectionStatus,
   PlayHQLiveMatch,
   PlayHQScorecard,
+  MatchSetupData,
+  ScoringState,
+  OverlayScoreModel,
+  LiveScorerPhase,
+  GameType,
 } from "@/types"
+import { saveMatchSetup, saveScoringState, clearMatchSetup, clearScoringState, loadMatchSetup, loadScoringState } from "@/lib/live-scorer-storage"
+import { createInitialScoringState, getOverlayModel } from "@/services/cricket-scoring-engine"
 
 interface DirectorStore {
   // Camera state
@@ -24,6 +31,12 @@ interface DirectorStore {
 
   // Overlay state
   overlayVisible: boolean
+
+  // Live Scorer state
+  liveScorerPhase: LiveScorerPhase
+  liveScorerGameType: GameType
+  matchSetup: MatchSetupData | null
+  scoringState: ScoringState | null
 
   // Broadcast state
   broadcastState: BroadcastState
@@ -52,6 +65,14 @@ interface DirectorStore {
   toggleOverlay: () => void
   setOverlayVisible: (visible: boolean) => void
 
+  // Actions - Live Scorer
+  setLiveScorerPhase: (phase: LiveScorerPhase) => void
+  saveMatchSetupData: (data: MatchSetupData) => void
+  setScoringState: (state: ScoringState) => void
+  startScoring: () => void
+  resetScorer: () => void
+  getOverlayScoreModel: () => OverlayScoreModel | null
+
   // Actions - Broadcast
   setBroadcastState: (state: Partial<BroadcastState>) => void
 
@@ -77,7 +98,7 @@ const initialBroadcastState: BroadcastState = {
   ],
 }
 
-export const useDirectorStore = create<DirectorStore>((set) => ({
+export const useDirectorStore = create<DirectorStore>((set, get) => ({
   // Initial camera state
   activeCameraId: null,
   cameras: [],
@@ -94,6 +115,12 @@ export const useDirectorStore = create<DirectorStore>((set) => ({
 
   // Overlay state
   overlayVisible: true,
+
+  // Initial Live Scorer state
+  liveScorerPhase: "setup",
+  liveScorerGameType: "Cricket",
+  matchSetup: null,
+  scoringState: null,
 
   // Initial broadcast state
   broadcastState: initialBroadcastState,
@@ -171,6 +198,47 @@ export const useDirectorStore = create<DirectorStore>((set) => ({
   // Overlay actions
   toggleOverlay: () => set((state) => ({ overlayVisible: !state.overlayVisible })),
   setOverlayVisible: (visible) => set(() => ({ overlayVisible: visible })),
+
+  // Live Scorer actions
+  setLiveScorerPhase: (phase) =>
+    set(() => ({ liveScorerPhase: phase })),
+
+  saveMatchSetupData: (data) => {
+    saveMatchSetup(data)
+    set(() => ({ matchSetup: data }))
+  },
+
+  setScoringState: (state) => {
+    saveScoringState(state)
+    set(() => ({ scoringState: state }))
+  },
+
+  startScoring: () => {
+    const { matchSetup } = get()
+    if (!matchSetup) return
+    const state = createInitialScoringState(matchSetup)
+    saveScoringState(state)
+    set(() => ({
+      scoringState: state,
+      liveScorerPhase: "playerSelect",
+    }))
+  },
+
+  resetScorer: () => {
+    clearMatchSetup()
+    clearScoringState()
+    set(() => ({
+      matchSetup: null,
+      scoringState: null,
+      liveScorerPhase: "setup",
+    }))
+  },
+
+  getOverlayScoreModel: () => {
+    const { scoringState } = get()
+    if (!scoringState) return null
+    return getOverlayModel(scoringState)
+  },
 
   // Broadcast actions
   setBroadcastState: (updates) =>

@@ -5,6 +5,7 @@ import { MatchInfoPanel } from "@/features/dashboard/match-info"
 import { ProgramFeed } from "@/features/dashboard/program-feed"
 import { CameraPanel } from "@/features/dashboard/camera-feed"
 import { BroadcastPanel } from "@/features/dashboard/broadcast-controls"
+import { LiveScorerPanel } from "@/features/live-scorer"
 import { useScoreProvider } from "@/hooks/use-score-provider"
 import { useCameras } from "@/hooks/use-cameras"
 
@@ -18,8 +19,9 @@ export default function DirectorDashboard() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[280px_1fr_280px] gap-3 p-3 overflow-hidden">
-          <div className="hidden lg:flex flex-col overflow-y-auto">
+          <div className="hidden lg:flex flex-col gap-3 overflow-y-auto">
             <MatchInfoPanel />
+            <LiveScorerPanel />
           </div>
 
           <div className="flex flex-col min-h-[300px] lg:min-h-0">
@@ -40,6 +42,15 @@ export default function DirectorDashboard() {
             </summary>
             <div className="pt-3">
               <MatchInfoPanel />
+            </div>
+          </details>
+          <details className="group">
+            <summary className="flex items-center justify-between p-3 bg-card/50 rounded-lg cursor-pointer list-none">
+              <span className="text-sm font-medium">Live Scorer</span>
+              <span className="text-muted-foreground text-xs group-open:rotate-180 transition-transform">&#9660;</span>
+            </summary>
+            <div className="pt-3">
+              <LiveScorerPanel />
             </div>
           </details>
           <details className="group">
