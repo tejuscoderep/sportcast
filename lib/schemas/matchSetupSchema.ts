@@ -9,6 +9,7 @@ export const matchSetupSchema = z.object({
   overs: z.number({ error: "Overs is required" }).min(1, "Minimum 1 over").max(50, "Maximum 50 overs"),
   tossWinner: z.enum(["Team A", "Team B", ""]),
   battingFirst: z.enum(["Team A", "Team B", ""]),
+  playerNames: z.record(z.string(), z.string()).optional(),
 })
 
 export type MatchSetupFormValues = z.infer<typeof matchSetupSchema>

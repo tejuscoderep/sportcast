@@ -25,6 +25,10 @@ import { PlayerEntry } from "./player-entry"
 import { useDirectorStore } from "@/store"
 import type { MatchSetupData } from "@/types"
 
+function generateDefaultPlayers(prefix: string): string[] {
+  return Array.from({ length: 11 }, (_, i) => `${prefix}P${String(i + 1).padStart(2, "0")}`)
+}
+
 interface MatchSetupModalProps {
   children: ReactNode
 }
@@ -33,6 +37,9 @@ export function MatchSetupModal({ children }: MatchSetupModalProps) {
   const [open, setOpen] = useState(false)
   const matchSetup = useDirectorStore((s) => s.matchSetup)
   const saveSetup = useDirectorStore((s) => s.saveMatchSetupData)
+
+  const defaultPlayersA = generateDefaultPlayers("TA")
+  const defaultPlayersB = generateDefaultPlayers("TB")
 
   const {
     register,
@@ -47,8 +54,8 @@ export function MatchSetupModal({ children }: MatchSetupModalProps) {
       venue: "",
       teamA: "",
       teamB: "",
-      playersA: [],
-      playersB: [],
+      playersA: defaultPlayersA,
+      playersB: defaultPlayersB,
       overs: 20,
       tossWinner: "",
       battingFirst: "",
@@ -72,8 +79,8 @@ export function MatchSetupModal({ children }: MatchSetupModalProps) {
         venue: "",
         teamA: "",
         teamB: "",
-        playersA: [],
-        playersB: [],
+        playersA: defaultPlayersA,
+        playersB: defaultPlayersB,
         overs: 20,
         tossWinner: "",
         battingFirst: "",
@@ -85,6 +92,8 @@ export function MatchSetupModal({ children }: MatchSetupModalProps) {
   const playersB = watch("playersB")
   const tossWinner = watch("tossWinner")
   const battingFirst = watch("battingFirst")
+  const teamAName = watch("teamA")
+  const teamBName = watch("teamB")
 
   const onSubmit = (values: MatchSetupFormValues) => {
     const data: MatchSetupData = {
@@ -96,10 +105,16 @@ export function MatchSetupModal({ children }: MatchSetupModalProps) {
       overs: values.overs,
       tossWinner: values.tossWinner,
       battingFirst: values.battingFirst,
+      playerNames: matchSetup?.playerNames ?? {},
     }
     saveSetup(data)
     setOpen(false)
   }
+
+  const tossOptions = [
+    { value: "Team A", label: teamAName || "Team A" },
+    { value: "Team B", label: teamBName || "Team B" },
+  ]
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -120,36 +135,18 @@ export function MatchSetupModal({ children }: MatchSetupModalProps) {
             {errors.venue && <p className="text-xs text-destructive" role="alert">{errors.venue.message}</p>}
           </div>
 
-          {/* Team A */}
-          <div className="space-y-2.5">
-            <div className="space-y-1.5">
-              <label htmlFor="team-a-name" className="text-sm font-medium text-foreground">Team A Name</label>
-              <Input id="team-a-name" placeholder="e.g. Brisbane Tigers" {...register("teamA")} />
-              {errors.teamA && <p className="text-xs text-destructive" role="alert">{errors.teamA.message}</p>}
-            </div>
-            <PlayerEntry
-              label="Team A Players"
-              players={playersA}
-              onChange={(p) => setValue("playersA", p, { shouldValidate: true })}
-              maxPlayers={11}
-              error={errors.playersA?.message}
-            />
+          {/* Team A Name */}
+          <div className="space-y-1.5">
+            <label htmlFor="team-a-name" className="text-sm font-medium text-foreground">Team A Name</label>
+            <Input id="team-a-name" placeholder="e.g. Brisbane Tigers" {...register("teamA")} />
+            {errors.teamA && <p className="text-xs text-destructive" role="alert">{errors.teamA.message}</p>}
           </div>
 
-          {/* Team B */}
-          <div className="space-y-2.5">
-            <div className="space-y-1.5">
-              <label htmlFor="team-b-name" className="text-sm font-medium text-foreground">Team B Name</label>
-              <Input id="team-b-name" placeholder="e.g. Gold Coast Sharks" {...register("teamB")} />
-              {errors.teamB && <p className="text-xs text-destructive" role="alert">{errors.teamB.message}</p>}
-            </div>
-            <PlayerEntry
-              label="Team B Players"
-              players={playersB}
-              onChange={(p) => setValue("playersB", p, { shouldValidate: true })}
-              maxPlayers={11}
-              error={errors.playersB?.message}
-            />
+          {/* Team B Name */}
+          <div className="space-y-1.5">
+            <label htmlFor="team-b-name" className="text-sm font-medium text-foreground">Team B Name</label>
+            <Input id="team-b-name" placeholder="e.g. Gold Coast Sharks" {...register("teamB")} />
+            {errors.teamB && <p className="text-xs text-destructive" role="alert">{errors.teamB.message}</p>}
           </div>
 
           {/* Innings Overs */}
@@ -170,8 +167,9 @@ export function MatchSetupModal({ children }: MatchSetupModalProps) {
                 <SelectValue placeholder="Select team" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Team A">Team A</SelectItem>
-                <SelectItem value="Team B">Team B</SelectItem>
+                {tossOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -187,11 +185,30 @@ export function MatchSetupModal({ children }: MatchSetupModalProps) {
                 <SelectValue placeholder="Select team" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Team A">Team A</SelectItem>
-                <SelectItem value="Team B">Team B</SelectItem>
+                {tossOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
+
+          {/* Team A Players (at end) */}
+          <PlayerEntry
+            label="Team A Players"
+            players={playersA}
+            onChange={(p) => setValue("playersA", p, { shouldValidate: true })}
+            maxPlayers={11}
+            error={errors.playersA?.message}
+          />
+
+          {/* Team B Players (at end) */}
+          <PlayerEntry
+            label="Team B Players"
+            players={playersB}
+            onChange={(p) => setValue("playersB", p, { shouldValidate: true })}
+            maxPlayers={11}
+            error={errors.playersB?.message}
+          />
 
           {/* Footer */}
           <div className="flex justify-end gap-2 pt-2">

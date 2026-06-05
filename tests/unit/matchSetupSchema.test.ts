@@ -27,6 +27,14 @@ describe("matchSetupSchema", () => {
       })
       expect(result.success).toBe(true)
     })
+
+    it("accepts data with playerNames", () => {
+      const result = matchSetupSchema.safeParse({
+        ...validData,
+        playerNames: { "Player A1": "John" },
+      })
+      expect(result.success).toBe(true)
+    })
   })
 
   describe("required fields", () => {
@@ -98,6 +106,11 @@ describe("matchSetupSchema", () => {
 
     it("accepts empty battingFirst", () => {
       const result = matchSetupSchema.safeParse({ ...validData, battingFirst: "" })
+      expect(result.success).toBe(true)
+    })
+
+    it("accepts missing playerNames", () => {
+      const result = matchSetupSchema.safeParse(validData)
       expect(result.success).toBe(true)
     })
   })

@@ -1,10 +1,15 @@
-import type { ScoringState, BallEvent, BatterState, BowlerState, OverlayScoreModel, MatchSetupData } from "@/types"
+import type { ScoringState, BallEvent, OverlayScoreModel, MatchSetupData, WicketType } from "@/types"
+
+function generateDefaultPlayers(teamCode: string): string[] {
+  return Array.from({ length: 11 }, (_, i) => `${teamCode}P${String(i + 1).padStart(2, "0")}`)
+}
 
 export function createInitialScoringState(setup: MatchSetupData): ScoringState {
   const battingTeamName = setup.battingFirst === "Team B" ? setup.teamB : setup.teamA
   const bowlingTeamName = setup.battingFirst === "Team B" ? setup.teamA : setup.teamB
   const battingPlayers = setup.battingFirst === "Team B" ? setup.playersB : setup.playersA
   const bowlingPlayers = setup.battingFirst === "Team B" ? setup.playersA : setup.playersB
+  const totalBalls = setup.overs * 6
 
   return {
     runs: 0,
@@ -16,7 +21,7 @@ export function createInitialScoringState(setup: MatchSetupData): ScoringState {
     battingTeam: battingTeamName,
     bowlingTeam: bowlingTeamName,
     striker: null,
-    nonStriker: null,
+    runner: null,
     currentBowler: null,
     batters: battingPlayers.map((name) => ({
       name,
@@ -33,17 +38,64 @@ export function createInitialScoringState(setup: MatchSetupData): ScoringState {
     currentOverBalls: [],
     history: [],
     initialStriker: null,
-    initialNonStriker: null,
+    initialRunner: null,
     initialBowler: null,
+    inningsNumber: 1,
+    firstInningsScore: null,
+    firstInningsOvers: 0,
+    firstInningsBalls: 0,
+    firstInningsWickets: 0,
+    firstInningsRuns: 0,
+    isSecondInnings: false,
+    ballsRemaining: totalBalls,
+    inningsEnded: false,
   }
 }
 
 function rotateStrike(state: ScoringState): ScoringState {
   return {
     ...state,
-    striker: state.nonStriker,
-    nonStriker: state.striker,
+    striker: state.runner,
+    runner: state.striker,
   }
+}
+
+function checkInningsEnd(state: ScoringState, setup: MatchSetupData | null): ScoringState {
+  const totalBalls = setup ? setup.overs * 6 : 999
+  const totalBallsBowled = state.overs * 6 + state.balls
+  const allOut = state.wickets >= 10
+  const oversComplete = totalBallsBowled >= totalBalls
+
+  if (!allOut && !oversComplete) return state
+
+  if (state.inningsNumber === 1) {
+    // End first innings, start second
+    const totalBallsForSecond = totalBalls
+    const secondInningsSetup = setup
+      ? {
+          ...setup,
+          battingFirst: setup.battingFirst === "Team A" ? "Team B" : "Team A",
+        }
+      : null
+
+    if (!secondInningsSetup) return { ...state, inningsEnded: true }
+
+    const secondInnings = createInitialScoringState(secondInningsSetup)
+    secondInnings.inningsNumber = 2
+    secondInnings.isSecondInnings = true
+    secondInnings.firstInningsScore = state.runs
+    secondInnings.firstInningsRuns = state.runs
+    secondInnings.firstInningsWickets = state.wickets
+    secondInnings.firstInningsOvers = state.overs
+    secondInnings.firstInningsBalls = state.balls
+    secondInnings.target = state.runs + 1
+    secondInnings.ballsRemaining = totalBallsForSecond
+
+    return { ...secondInnings, inningsEnded: false }
+  }
+
+  // Second innings ends
+  return { ...state, inningsEnded: true }
 }
 
 function incrementBall(state: ScoringState): ScoringState {
@@ -58,7 +110,9 @@ function incrementBall(state: ScoringState): ScoringState {
     newState = rotateStrike(newState)
   }
 
-  return { ...newState, balls: newBalls, overs: newOvers }
+  const newBallsRemaining = Math.max(0, state.ballsRemaining - 1)
+
+  return { ...newState, balls: newBalls, overs: newOvers, ballsRemaining: newBallsRemaining }
 }
 
 function updateBatter(state: ScoringState, name: string | null, runs: number, ballsFaced: number): ScoringState {
@@ -71,7 +125,7 @@ function updateBatter(state: ScoringState, name: string | null, runs: number, ba
   }
 }
 
-function updateBowler(state: ScoringState, name: string | null, runs: number, wicket: boolean): ScoringState {
+function updateBowler(state: ScoringState, name: string | null, runs: number, wicket: boolean, countBall: boolean = true): ScoringState {
   if (!name) return state
   return {
     ...state,
@@ -81,7 +135,7 @@ function updateBowler(state: ScoringState, name: string | null, runs: number, wi
             ...b,
             runsConceded: b.runsConceded + runs,
             wickets: b.wickets + (wicket ? 1 : 0),
-            balls: b.balls + 1,
+            balls: countBall ? b.balls + 1 : b.balls,
           }
         : b
     ),
@@ -102,6 +156,7 @@ export function scoreRuns(state: ScoringState, runs: number): ScoringState {
     runs: state.runs + runs,
     currentOverBalls: [...state.currentOverBalls, event],
     history: [...state.history, event],
+    inningsEnded: false,
   }
 
   newState = updateBatter(newState, state.striker, runs, 1)
@@ -116,10 +171,11 @@ export function scoreRuns(state: ScoringState, runs: number): ScoringState {
   return newState
 }
 
-export function scoreWide(state: ScoringState, runs: number): ScoringState {
+export function scoreWide(state: ScoringState, extraRuns: number): ScoringState {
+  const totalRuns = 1 + extraRuns
   const event: BallEvent = {
     type: "wide",
-    runs,
+    runs: extraRuns,
     bowler: state.currentBowler ?? undefined,
     isExtra: true,
     extraType: "wide",
@@ -127,22 +183,29 @@ export function scoreWide(state: ScoringState, runs: number): ScoringState {
 
   let newState = {
     ...state,
-    runs: state.runs + runs,
-    extras: state.extras + runs,
+    runs: state.runs + totalRuns,
+    extras: state.extras + totalRuns,
     currentOverBalls: [...state.currentOverBalls, event],
     history: [...state.history, event],
+    inningsEnded: false,
   }
 
-  // Wide: 1 run to team + extra runs, bowler gets all runs conceded, no ball counted
-  newState = updateBowler(newState, state.currentBowler, runs, false)
+  // Bowler gets all runs conceded, no ball counted
+  newState = updateBowler(newState, state.currentBowler, totalRuns, false, false)
+
+  // If total wide runs (1 + extra) is odd, rotate strike
+  if (totalRuns % 2 === 1) {
+    newState = rotateStrike(newState)
+  }
 
   return newState
 }
 
-export function scoreNoBall(state: ScoringState, runs: number): ScoringState {
+export function scoreNoBall(state: ScoringState, batsmanRuns: number): ScoringState {
+  const totalRuns = 1 + batsmanRuns
   const event: BallEvent = {
     type: "noBall",
-    runs,
+    runs: batsmanRuns,
     batter: state.striker ?? undefined,
     bowler: state.currentBowler ?? undefined,
     isExtra: true,
@@ -151,17 +214,19 @@ export function scoreNoBall(state: ScoringState, runs: number): ScoringState {
 
   let newState = {
     ...state,
-    runs: state.runs + 1 + runs, // 1 for no ball + any batsman runs
+    runs: state.runs + totalRuns,
     extras: state.extras + 1,
     currentOverBalls: [...state.currentOverBalls, event],
     history: [...state.history, event],
+    inningsEnded: false,
   }
 
-  // Batsman runs go to batsman, all runs go against bowler
-  if (runs > 0 && state.striker) {
-    newState = updateBatter(newState, state.striker, runs, 0)
+  // Batsman runs go to batsman, no ball counted
+  if (batsmanRuns > 0 && state.striker) {
+    newState = updateBatter(newState, state.striker, batsmanRuns, 0)
   }
-  newState = updateBowler(newState, state.currentBowler, 1 + runs, false)
+  // All runs go against bowler, no ball counted for bowler
+  newState = updateBowler(newState, state.currentBowler, totalRuns, false, false)
 
   // No ball does NOT rotate strike, no ball counted
   return newState
@@ -183,9 +248,10 @@ export function scoreByes(state: ScoringState, runs: number): ScoringState {
     extras: state.extras + runs,
     currentOverBalls: [...state.currentOverBalls, event],
     history: [...state.history, event],
+    inningsEnded: false,
   }
 
-  // Byes: ball counts, runs to extras, not to batter, bowler not charged
+  // Byes: ball counts, runs to extras, not to batter
   newState = updateBatter(newState, state.striker, 0, 1)
   newState = incrementBall(newState)
 
@@ -212,6 +278,7 @@ export function scoreLegByes(state: ScoringState, runs: number): ScoringState {
     extras: state.extras + runs,
     currentOverBalls: [...state.currentOverBalls, event],
     history: [...state.history, event],
+    inningsEnded: false,
   }
 
   newState = updateBatter(newState, state.striker, 0, 1)
@@ -224,7 +291,7 @@ export function scoreLegByes(state: ScoringState, runs: number): ScoringState {
   return newState
 }
 
-export function scoreWicket(state: ScoringState): ScoringState {
+export function scoreWicket(state: ScoringState, wicketType: WicketType, fielder: string | null = null): ScoringState {
   const dismissedBatter = state.striker
   const event: BallEvent = {
     type: "wicket",
@@ -233,6 +300,8 @@ export function scoreWicket(state: ScoringState): ScoringState {
     bowler: state.currentBowler ?? undefined,
     isExtra: false,
     dismissedBatter: dismissedBatter ?? undefined,
+    wicketType,
+    fielder: fielder ?? undefined,
   }
 
   let newState = {
@@ -240,6 +309,7 @@ export function scoreWicket(state: ScoringState): ScoringState {
     wickets: state.wickets + 1,
     currentOverBalls: [...state.currentOverBalls, event],
     history: [...state.history, event],
+    inningsEnded: false,
   }
 
   // Mark batter as out
@@ -265,7 +335,6 @@ export function scoreWicket(state: ScoringState): ScoringState {
 export function undoLastBall(state: ScoringState): ScoringState {
   if (state.history.length === 0) return state
 
-  // Rebuild state from scratch without last ball
   const previousHistory = state.history.slice(0, -1)
   let rebuiltState: ScoringState = {
     ...state,
@@ -275,15 +344,18 @@ export function undoLastBall(state: ScoringState): ScoringState {
     balls: 0,
     extras: 0,
     striker: state.initialStriker,
-    nonStriker: state.initialNonStriker,
+    runner: state.initialRunner,
     currentBowler: state.initialBowler,
     batters: state.batters.map((b) => ({ ...b, runs: 0, balls: 0, isOut: false })),
     bowlers: state.bowlers.map((b) => ({ ...b, runsConceded: 0, wickets: 0, balls: 0 })),
     currentOverBalls: [],
     history: [],
+    inningsEnded: false,
+    ballsRemaining: (state.isSecondInnings && state.firstInningsScore !== null)
+      ? state.firstInningsOvers * 6 + state.firstInningsBalls + (state.overs * 6 + state.balls)
+      : state.ballsRemaining + 1,
   }
 
-  // Re-apply all events except the last
   for (const event of previousHistory) {
     switch (event.type) {
       case "runs":
@@ -302,7 +374,7 @@ export function undoLastBall(state: ScoringState): ScoringState {
         rebuiltState = scoreLegByes(rebuiltState, event.runs)
         break
       case "wicket":
-        rebuiltState = scoreWicket(rebuiltState)
+        rebuiltState = scoreWicket(rebuiltState, event.wicketType ?? "bowled", event.fielder ?? null)
         break
     }
   }
@@ -311,23 +383,20 @@ export function undoLastBall(state: ScoringState): ScoringState {
 }
 
 export function setStriker(state: ScoringState, name: string): ScoringState {
-  // Capture initial striker on first assignment
   if (!state.initialStriker) {
     return { ...state, striker: name, initialStriker: name }
   }
   return { ...state, striker: name }
 }
 
-export function setNonStriker(state: ScoringState, name: string): ScoringState {
-  // Capture initial non-striker on first assignment
-  if (!state.initialNonStriker) {
-    return { ...state, nonStriker: name, initialNonStriker: name }
+export function setRunner(state: ScoringState, name: string): ScoringState {
+  if (!state.initialRunner) {
+    return { ...state, runner: name, initialRunner: name }
   }
-  return { ...state, nonStriker: name }
+  return { ...state, runner: name }
 }
 
 export function setCurrentBowler(state: ScoringState, name: string): ScoringState {
-  // Capture initial bowler on first assignment
   if (!state.initialBowler) {
     return { ...state, currentBowler: name, initialBowler: name }
   }
@@ -348,7 +417,7 @@ export function getOverlayModel(state: ScoringState): OverlayScoreModel {
     striker: state.striker
       ? `${state.striker} ${strikerBatter?.runs ?? 0} (${strikerBatter?.balls ?? 0})`
       : null,
-    nonStriker: state.nonStriker ?? null,
+    nonStriker: state.runner ?? null,
     bowler: state.currentBowler
       ? `${state.currentBowler} ${currentBowlerState?.wickets ?? 0}/${currentBowlerState?.runsConceded ?? 0}`
       : null,
@@ -358,4 +427,10 @@ export function getOverlayModel(state: ScoringState): OverlayScoreModel {
 
 export function formatOvers(state: ScoringState): string {
   return `${state.overs}.${state.balls}`
+}
+
+export function getDisplayName(name: string, playerNames: Record<string, string>): string {
+  const customName = playerNames[name]
+  if (customName) return `${name} ${customName}`
+  return name
 }

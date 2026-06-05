@@ -1,3 +1,5 @@
 export { LiveScorerPanel } from "./live-scorer-panel"
 export { MatchSetupModal } from "./match-setup-modal"
 export { PlayerEntry } from "./player-entry"
+export { ExtraRunsModal } from "./extra-runs-modal"
+export { WicketModal } from "./wicket-modal"

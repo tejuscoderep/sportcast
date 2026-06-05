@@ -58,6 +58,8 @@ export type PlayHQConnectionStatus = "disconnected" | "connecting" | "connected"
 // Live Scorer types
 export type GameType = "Cricket" | "Basketball" | "Netball" | "AFL"
 
+export type WicketType = "bowled" | "caught" | "runOut" | "stumped" | "other"
+
 export interface MatchSetupData {
   venue: string
   teamA: string
@@ -67,6 +69,7 @@ export interface MatchSetupData {
   overs: number
   tossWinner: "Team A" | "Team B" | ""
   battingFirst: "Team A" | "Team B" | ""
+  playerNames: Record<string, string>
 }
 
 export interface BatterState {
@@ -93,15 +96,24 @@ export interface ScoringState {
   battingTeam: string
   bowlingTeam: string
   striker: string | null
-  nonStriker: string | null
+  runner: string | null
   currentBowler: string | null
   batters: BatterState[]
   bowlers: BowlerState[]
   currentOverBalls: BallEvent[]
   history: BallEvent[]
   initialStriker: string | null
-  initialNonStriker: string | null
+  initialRunner: string | null
   initialBowler: string | null
+  inningsNumber: number
+  firstInningsScore: number | null
+  firstInningsOvers: number
+  firstInningsBalls: number
+  firstInningsWickets: number
+  firstInningsRuns: number
+  isSecondInnings: boolean
+  ballsRemaining: number
+  inningsEnded: boolean
 }
 
 export interface BallEvent {
@@ -112,6 +124,8 @@ export interface BallEvent {
   isExtra: boolean
   extraType?: "wide" | "noBall" | "byes" | "legByes"
   dismissedBatter?: string
+  wicketType?: WicketType
+  fielder?: string
 }
 
 export interface OverlayScoreModel {

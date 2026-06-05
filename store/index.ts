@@ -72,6 +72,7 @@ interface DirectorStore {
   startScoring: () => void
   resetScorer: () => void
   getOverlayScoreModel: () => OverlayScoreModel | null
+  updatePlayerName: (playerId: string, name: string) => void
 
   // Actions - Broadcast
   setBroadcastState: (state: Partial<BroadcastState>) => void
@@ -238,6 +239,29 @@ export const useDirectorStore = create<DirectorStore>((set, get) => ({
     const { scoringState } = get()
     if (!scoringState) return null
     return getOverlayModel(scoringState)
+  },
+
+  updatePlayerName: (playerId, name) => {
+    const { matchSetup, scoringState } = get()
+    if (!matchSetup) return
+
+    const updatedNames = { ...matchSetup.playerNames, [playerId]: name }
+    const updatedSetup = { ...matchSetup, playerNames: updatedNames }
+    saveMatchSetup(updatedSetup)
+    set(() => ({ matchSetup: updatedSetup }))
+
+    // Also update scoring state batter/bowler names if they reference this player
+    if (scoringState) {
+      const updatedBatters = scoringState.batters.map((b) =>
+        b.name === playerId ? b : b
+      )
+      const updatedBowlers = scoringState.bowlers.map((b) =>
+        b.name === playerId ? b : b
+      )
+      const updatedScoring = { ...scoringState, batters: updatedBatters, bowlers: updatedBowlers }
+      saveScoringState(updatedScoring)
+      set(() => ({ scoringState: updatedScoring }))
+    }
   },
 
   // Broadcast actions

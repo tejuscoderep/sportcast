@@ -8,30 +8,54 @@ import { BroadcastPanel } from "@/features/dashboard/broadcast-controls"
 import { LiveScorerPanel } from "@/features/live-scorer"
 import { useScoreProvider } from "@/hooks/use-score-provider"
 import { useCameras } from "@/hooks/use-cameras"
+import { useDirectorStore } from "@/store"
 
 export default function DirectorDashboard() {
   useScoreProvider()
   useCameras()
+
+  const scoringPhase = useDirectorStore((s) => s.liveScorerPhase)
+  const isScoring = scoringPhase === "scoring"
 
   return (
     <div className="h-screen flex flex-col bg-background">
       <DashboardHeader />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[280px_1fr_280px] gap-3 p-3 overflow-hidden">
-          <div className="hidden lg:flex flex-col gap-3 overflow-y-auto">
-            <MatchInfoPanel />
-            <LiveScorerPanel />
-          </div>
+        {isScoring ? (
+          // Scoring mode: left panel takes full height
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-[320px_1fr_280px] gap-3 p-3 overflow-hidden">
+            <div className="hidden lg:flex flex-col overflow-y-auto">
+              <MatchInfoPanel />
+              <div className="flex-1 mt-3">
+                <LiveScorerPanel />
+              </div>
+            </div>
 
-          <div className="flex flex-col min-h-[300px] lg:min-h-0">
-            <ProgramFeed />
-          </div>
+            <div className="flex flex-col min-h-[300px] lg:min-h-0">
+              <ProgramFeed />
+            </div>
 
-          <div className="hidden lg:flex flex-col overflow-y-auto">
-            <CameraPanel />
+            <div className="hidden lg:flex flex-col overflow-y-auto">
+              <CameraPanel />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-[280px_1fr_280px] gap-3 p-3 overflow-hidden">
+            <div className="hidden lg:flex flex-col gap-3 overflow-y-auto">
+              <MatchInfoPanel />
+              <LiveScorerPanel />
+            </div>
+
+            <div className="flex flex-col min-h-[300px] lg:min-h-0">
+              <ProgramFeed />
+            </div>
+
+            <div className="hidden lg:flex flex-col overflow-y-auto">
+              <CameraPanel />
+            </div>
+          </div>
+        )}
 
         {/* Mobile accordions */}
         <div className="lg:hidden p-3 space-y-3 overflow-y-auto max-h-[50vh]">

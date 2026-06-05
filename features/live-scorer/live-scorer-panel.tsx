@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectTrigger,
@@ -12,8 +13,10 @@ import {
   SelectItem,
 } from "@/components/ui/select"
 import { useDirectorStore } from "@/store"
-import type { ScoringState } from "@/types"
+import type { ScoringState, WicketType } from "@/types"
 import { MatchSetupModal } from "./match-setup-modal"
+import { ExtraRunsModal } from "./extra-runs-modal"
+import { WicketModal } from "./wicket-modal"
 import {
   scoreRuns,
   scoreWide,
@@ -23,11 +26,12 @@ import {
   scoreWicket,
   undoLastBall,
   setStriker,
-  setNonStriker,
+  setRunner,
   setCurrentBowler,
   formatOvers,
+  getDisplayName,
 } from "@/services/cricket-scoring-engine"
-import { ClipboardList, Dices, RotateCcw } from "lucide-react"
+import { ClipboardList, RotateCcw, Dices, Minus, Plus } from "lucide-react"
 import { useState } from "react"
 
 export function LiveScorerPanel() {
@@ -39,48 +43,46 @@ export function LiveScorerPanel() {
   const setScoringState = useDirectorStore((s) => s.setScoringState)
   const resetScorer = useDirectorStore((s) => s.resetScorer)
   const gameType = useDirectorStore((s) => s.liveScorerGameType)
+  const updatePlayerName = useDirectorStore((s) => s.updatePlayerName)
+  const playerNames = matchSetup?.playerNames ?? {}
 
-  const [extraRunsOpen, setExtraRunsOpen] = useState<string | null>(null)
-  const [newBatterSelect, setNewBatterSelect] = useState(false)
+  const [extraModalType, setExtraModalType] = useState<string | null>(null)
+  const [wicketModalOpen, setWicketModalOpen] = useState(false)
 
   const handleStartScoring = () => {
     if (!matchSetup) return
-    if (!matchSetup.tossWinner || !matchSetup.battingFirst) {
-      // Reopen setup modal - handled by MatchSetupModal trigger
-      return
-    }
-    startScoring()
+    if (!matchSetup.tossWinner || !matchSetup.battingFirst) return
+    if (!scoringState?.striker || !scoringState?.runner || !scoringState?.currentBowler) return
+    setPhase("scoring")
   }
 
   const handleScoreRuns = (runs: number) => {
     if (!scoringState) return
-    setScoringState(scoreRuns(scoringState, runs))
+    const newState = scoreRuns(scoringState, runs)
+    setScoringState(newState)
   }
 
-  const handleExtra = (type: string, runs: number) => {
+  const handleExtraScore = (type: string, runs: number) => {
     if (!scoringState) return
+    let newState: ScoringState
     switch (type) {
       case "wide":
-        setScoringState(scoreWide(scoringState, runs))
+        newState = scoreWide(scoringState, runs)
         break
       case "noBall":
-        setScoringState(scoreNoBall(scoringState, runs))
+        newState = scoreNoBall(scoringState, runs)
         break
       case "byes":
-        setScoringState(scoreByes(scoringState, runs))
+        newState = scoreByes(scoringState, runs)
         break
       case "legByes":
-        setScoringState(scoreLegByes(scoringState, runs))
+        newState = scoreLegByes(scoringState, runs)
         break
+      default:
+        return
     }
-    setExtraRunsOpen(null)
-  }
-
-  const handleWicket = () => {
-    if (!scoringState) return
-    const newState = scoreWicket(scoringState)
     setScoringState(newState)
-    setNewBatterSelect(true)
+    setExtraModalType(null)
   }
 
   const handleUndo = () => {
@@ -93,9 +95,9 @@ export function LiveScorerPanel() {
     setScoringState(setStriker(scoringState, name))
   }
 
-  const handleSelectNonStriker = (name: string) => {
+  const handleSelectRunner = (name: string) => {
     if (!scoringState) return
-    setScoringState(setNonStriker(scoringState, name))
+    setScoringState(setRunner(scoringState, name))
   }
 
   const handleSelectBowler = (name: string) => {
@@ -103,20 +105,17 @@ export function LiveScorerPanel() {
     setScoringState(setCurrentBowler(scoringState, name))
   }
 
-  const handleNewBatter = (name: string) => {
+  const handleWicketComplete = (wicketType: WicketType, fielder: string | null, newBatterName: string | null) => {
     if (!scoringState) return
-    setScoringState(setStriker(scoringState, name))
-    setNewBatterSelect(false)
+    let newState = scoreWicket(scoringState, wicketType, fielder)
+    if (newBatterName) {
+      newState = setStriker(newState, newBatterName)
+    }
+    setScoringState(newState)
+    setWicketModalOpen(false)
   }
 
-  // Available batters (not out, not already at crease)
-  const availableBatters = scoringState?.batters
-    .filter((b) => !b.isOut && b.name !== scoringState.nonStriker && b.name !== scoringState.striker)
-    .map((b) => b.name) ?? []
-
-  const availableBowlers = scoringState?.bowlers.map((b) => b.name) ?? []
-
-  // Setup phase
+  // Setup phase (no match setup saved yet)
   if (phase === "setup" && !matchSetup) {
     return (
       <Card className="bg-card/50">
@@ -126,26 +125,10 @@ export function LiveScorerPanel() {
               <ClipboardList className="w-4 h-4 text-blue-400" />
               Live Scorer
             </CardTitle>
-            <Badge variant="outline" className="text-xs">
-              {gameType}
-            </Badge>
+            <Badge variant="outline" className="text-xs">{gameType}</Badge>
           </div>
         </CardHeader>
         <CardContent className="px-4 pb-3 space-y-2">
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground block">Game Type</label>
-            <Select value={gameType} disabled>
-              <SelectTrigger className="w-full text-xs h-7">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Cricket">Cricket</SelectItem>
-                <SelectItem value="Basketball">Basketball</SelectItem>
-                <SelectItem value="Netball">Netball</SelectItem>
-                <SelectItem value="AFL">AFL</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <MatchSetupModal>
             <Button className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white">
               <Dices className="w-4 h-4" />
@@ -157,53 +140,118 @@ export function LiveScorerPanel() {
     )
   }
 
-  // After setup saved but before scoring
+  // After setup saved but before scoring (show match details + Batter/Runner/Bowler selectors)
   if (matchSetup && (phase === "setup" || phase === "playerSelect")) {
+    const tossTeamName = matchSetup.tossWinner
+      ? (matchSetup.tossWinner === "Team A" ? matchSetup.teamA : matchSetup.teamB)
+      : ""
+    const battingTeamName = matchSetup.battingFirst
+      ? (matchSetup.battingFirst === "Team A" ? matchSetup.teamA : matchSetup.teamB)
+      : ""
     const missingSetup = !matchSetup.tossWinner || !matchSetup.battingFirst
+    const canStart = !missingSetup && scoringState?.striker && scoringState?.runner && scoringState?.currentBowler
+
+    // Available players for batting team
+    const battingPlayers = matchSetup.battingFirst === "Team B" ? matchSetup.playersB : matchSetup.playersA
+    const bowlingPlayers = matchSetup.battingFirst === "Team B" ? matchSetup.playersA : matchSetup.playersB
+
     return (
       <Card className="bg-card/50">
         <CardHeader className="pb-2 pt-3 px-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium tracking-wide flex items-center gap-2">
-              <ClipboardList className="w-4 h-4 text-blue-400" />
-              Live Scorer
-            </CardTitle>
-          </div>
+          <CardTitle className="text-sm font-medium tracking-wide flex items-center gap-2">
+            <ClipboardList className="w-4 h-4 text-blue-400" />
+            Live Scorer
+          </CardTitle>
         </CardHeader>
         <CardContent className="px-4 pb-3 space-y-2">
+          {/* Match details */}
           <p className="text-sm font-medium text-foreground">
             {matchSetup.teamA} vs {matchSetup.teamB}
           </p>
           <div className="text-xs text-muted-foreground space-y-0.5">
-            <p>Venue: {matchSetup.venue}</p>
-            <p>Toss Won By: {matchSetup.tossWinner ? (matchSetup.tossWinner === "Team A" ? matchSetup.teamA : matchSetup.teamB) : "No Data Available"}</p>
-            <p>Batting First: {matchSetup.battingFirst ? (matchSetup.battingFirst === "Team A" ? matchSetup.teamA : matchSetup.teamB) : "No Data Available"}</p>
+            <p>{matchSetup.venue}</p>
+            <p>Total Innings Overs - {matchSetup.overs}</p>
+            <p>Toss Won By - {tossTeamName || "Not selected"}</p>
+            <p>Batting First - {battingTeamName || "Not selected"}</p>
           </div>
 
-          {phase === "playerSelect" ? (
-            <PlayerSelectionControls
-              scoringState={scoringState}
-              matchSetup={matchSetup}
-              onSelectStriker={handleSelectStriker}
-              onSelectNonStriker={handleSelectNonStriker}
-              onSelectBowler={handleSelectBowler}
-              onStart={() => setPhase("scoring")}
-            />
+          {missingSetup ? (
+            <div className="pt-2">
+              <MatchSetupModal>
+                <Button variant="outline" className="w-full gap-2 text-xs">
+                  Complete Setup
+                </Button>
+              </MatchSetupModal>
+            </div>
           ) : (
-            <div className="space-y-2 pt-2">
+            <div className="space-y-2.5 pt-2">
+              {/* Batter selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">Batter</label>
+                <Select value={scoringState?.striker ?? ""} onValueChange={handleSelectStriker}>
+                  <SelectTrigger className="w-full text-xs h-7">
+                    <SelectValue placeholder="Select batter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {battingPlayers
+                      .filter((n) => n !== scoringState?.runner)
+                      .map((name) => (
+                        <SelectItem key={name} value={name}>{getDisplayName(name, playerNames)}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {scoringState?.striker && (
+                  <PlayerNameInput playerId={scoringState.striker} currentName={playerNames[scoringState.striker]} onUpdate={updatePlayerName} />
+                )}
+              </div>
+
+              {/* Runner selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">Runner</label>
+                <Select value={scoringState?.runner ?? ""} onValueChange={handleSelectRunner}>
+                  <SelectTrigger className="w-full text-xs h-7">
+                    <SelectValue placeholder="Select runner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {battingPlayers
+                      .filter((n) => n !== scoringState?.striker)
+                      .map((name) => (
+                        <SelectItem key={name} value={name}>{getDisplayName(name, playerNames)}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {scoringState?.runner && (
+                  <PlayerNameInput playerId={scoringState.runner} currentName={playerNames[scoringState.runner]} onUpdate={updatePlayerName} />
+                )}
+              </div>
+
+              {/* Bowler selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">Bowler</label>
+                <Select value={scoringState?.currentBowler ?? ""} onValueChange={handleSelectBowler}>
+                  <SelectTrigger className="w-full text-xs h-7">
+                    <SelectValue placeholder="Select bowler" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {bowlingPlayers.map((name) => (
+                      <SelectItem key={name} value={name}>{getDisplayName(name, playerNames)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {scoringState?.currentBowler && (
+                  <PlayerNameInput playerId={scoringState.currentBowler} currentName={playerNames[scoringState.currentBowler]} onUpdate={updatePlayerName} />
+                )}
+              </div>
+
+              {/* Start Scoring button */}
               <Button
-                className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="w-full gap-2 text-white"
+                disabled={!canStart}
                 onClick={handleStartScoring}
+                style={{ backgroundColor: canStart ? "#059669" : undefined }}
               >
                 Start Scoring
               </Button>
-              {missingSetup && (
-                <MatchSetupModal>
-                  <Button variant="outline" className="w-full gap-2 text-xs">
-                    Complete Setup
-                  </Button>
-                </MatchSetupModal>
-              )}
             </div>
           )}
         </CardContent>
@@ -211,17 +259,19 @@ export function LiveScorerPanel() {
     )
   }
 
-  // Scoring phase
+  // Scoring phase - expanded view
   if (phase === "scoring" && scoringState && matchSetup) {
     const striker = scoringState.batters.find((b) => b.name === scoringState.striker)
-    const nonStriker = scoringState.batters.find((b) => b.name === scoringState.nonStriker)
+    const runner = scoringState.batters.find((b) => b.name === scoringState.runner)
     const bowler = scoringState.bowlers.find((b) => b.name === scoringState.currentBowler)
 
+    const inningsOver = scoringState.inningsEnded
+
     return (
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2 h-full">
         {/* Scoreboard */}
-        <Card className="bg-card/50">
-          <CardHeader className="pb-2 pt-3 px-4">
+        <Card className="bg-card/50 shrink-0">
+          <CardHeader className="pb-1 pt-2 px-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium tracking-wide flex items-center gap-2">
                 <ClipboardList className="w-4 h-4 text-blue-400" />
@@ -233,7 +283,7 @@ export function LiveScorerPanel() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="px-4 pb-3 space-y-3">
+          <CardContent className="px-3 pb-2 space-y-2">
             {/* Score */}
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-foreground">{scoringState.battingTeam}</p>
@@ -247,210 +297,168 @@ export function LiveScorerPanel() {
               </div>
             </div>
 
+            {/* Target info for second innings */}
+            {scoringState.isSecondInnings && scoringState.target > 0 && (
+              <div className="text-xs text-amber-400">
+                Target: {scoringState.target} | Need: {Math.max(0, scoringState.target - scoringState.runs)} | Balls left: {scoringState.ballsRemaining}
+              </div>
+            )}
+
             <Separator className="bg-border/50" />
 
-            {/* Striker */}
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Striker</p>
-              {striker ? (
-                <p className="text-sm text-foreground">
-                  {striker.name} <span className="tabular-nums text-muted-foreground">{striker.runs} ({striker.balls})</span>
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">Select new batter</p>
-              )}
+            {/* Striker (Batter) */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Batter</p>
+                {striker ? (
+                  <p className="text-sm text-foreground">
+                    {getDisplayName(striker.name, playerNames)} <span className="tabular-nums text-muted-foreground">{striker.runs} ({striker.balls})</span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Select new batter</p>
+                )}
+              </div>
             </div>
 
-            {/* Non-Striker */}
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Non-Striker</p>
-              {nonStriker ? (
-                <p className="text-sm text-foreground">
-                  {nonStriker.name} <span className="tabular-nums text-muted-foreground">{nonStriker.runs} ({nonStriker.balls})</span>
-                </p>
-              ) : null}
+            {/* Runner */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Runner</p>
+                {runner ? (
+                  <p className="text-sm text-foreground">
+                    {getDisplayName(runner.name, playerNames)} <span className="tabular-nums text-muted-foreground">{runner.runs} ({runner.balls})</span>
+                  </p>
+                ) : null}
+              </div>
             </div>
 
             <Separator className="bg-border/50" />
 
             {/* Bowler */}
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Bowler</p>
-              {bowler ? (
-                <p className="text-sm text-foreground">
-                  {bowler.name} <span className="tabular-nums text-muted-foreground">{bowler.wickets}/{bowler.runsConceded}</span>
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">Select bowler</p>
-              )}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Bowler</p>
+                {bowler ? (
+                  <p className="text-sm text-foreground">
+                    {getDisplayName(bowler.name, playerNames)} <span className="tabular-nums text-muted-foreground">{bowler.wickets}/{bowler.runsConceded} ({bowler.balls})</span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Select bowler</p>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* New Batter Selection (after wicket) */}
-        {newBatterSelect && availableBatters.length > 0 && (
-          <Card className="bg-card/50 border-amber-500/30">
-            <CardContent className="p-3 space-y-2">
-              <p className="text-xs font-medium text-amber-400">Select New Batter</p>
-              <div className="flex flex-wrap gap-1">
-                {availableBatters.map((name) => (
-                  <Button key={name} size="xs" variant="outline" onClick={() => handleNewBatter(name)}>
-                    {name}
-                  </Button>
-                ))}
-              </div>
+        {/* Innings ended message */}
+        {inningsOver && (
+          <Card className="bg-amber-500/10 border-amber-500/30 shrink-0">
+            <CardContent className="p-3 text-center">
+              <p className="text-sm font-medium text-amber-400">
+                {scoringState.isSecondInnings ? "Match Over" : "Innings Break - Second Innings Starting"}
+              </p>
+              {scoringState.firstInningsScore !== null && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  First Innings: {scoringState.firstInningsRuns}/{scoringState.firstInningsWickets} ({scoringState.firstInningsOvers}.{scoringState.firstInningsBalls})
+                </p>
+              )}
             </CardContent>
           </Card>
         )}
 
         {/* Scoring Controls */}
-        <Card className="bg-card/50">
-          <CardContent className="p-3 space-y-2">
-            {/* Run buttons */}
-            <div className="grid grid-cols-4 gap-1.5">
-              {[0, 1, 2, 3, 4, 5, 6].map((runs) => (
-                <Button
-                  key={runs}
-                  variant={runs === 4 || runs === 6 ? "default" : "outline"}
-                  className={`h-9 text-sm font-semibold tabular-nums ${runs === 4 ? "bg-blue-600 text-white hover:bg-blue-700" : runs === 6 ? "bg-emerald-600 text-white hover:bg-emerald-700" : ""}`}
-                  onClick={() => handleScoreRuns(runs)}
-                >
-                  {runs}
-                </Button>
-              ))}
-            </div>
-
-            {/* Extra buttons */}
-            <div className="grid grid-cols-3 gap-1.5">
-              <Button variant="outline" size="sm" className="text-xs" onClick={() => setExtraRunsOpen("wide")}>
-                Wide
-              </Button>
-              <Button variant="outline" size="sm" className="text-xs" onClick={() => setExtraRunsOpen("noBall")}>
-                No Ball
-              </Button>
-              <Button variant="outline" size="sm" className="text-xs" onClick={() => setExtraRunsOpen("byes")}>
-                Byes
-              </Button>
-              <Button variant="outline" size="sm" className="text-xs" onClick={() => setExtraRunsOpen("legByes")}>
-                Leg Byes
-              </Button>
-              <Button variant="destructive" size="sm" className="text-xs" onClick={handleWicket}>
-                Wicket
-              </Button>
-              <Button variant="outline" size="sm" className="text-xs" onClick={handleUndo}>
-                Undo
-              </Button>
-            </div>
-
-            {/* Extra runs selector */}
-            {extraRunsOpen && (
-              <div className="space-y-1.5 pt-1">
-                <p className="text-xs text-muted-foreground">
-                  {extraRunsOpen === "wide" ? "Wide runs" : extraRunsOpen === "noBall" ? "No Ball runs" : extraRunsOpen === "byes" ? "Byes runs" : "Leg Byes runs"}
-                </p>
-                <div className="flex gap-1.5">
-                  {(extraRunsOpen === "wide" || extraRunsOpen === "noBall" ? [1, 2, 3, 4, 5] : [1, 2, 3, 4, 5, 6]).map((r) => (
-                    <Button key={r} size="xs" variant="secondary" onClick={() => handleExtra(extraRunsOpen, r)}>
-                      {r}
-                    </Button>
-                  ))}
-                  <Button size="xs" variant="ghost" onClick={() => setExtraRunsOpen(null)}>
-                    Cancel
+        {!inningsOver && (
+          <Card className="bg-card/50 flex-1">
+            <CardContent className="p-3 space-y-2">
+              {/* Run buttons */}
+              <div className="grid grid-cols-3 gap-1.5">
+                {[1, 2, 3, 4, 5, 6].map((runs) => (
+                  <Button
+                    key={runs}
+                    className={`h-10 text-sm font-semibold tabular-nums bg-emerald-600 text-white hover:bg-emerald-700`}
+                    onClick={() => handleScoreRuns(runs)}
+                  >
+                    {runs}
                   </Button>
-                </div>
+                ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
+
+              {/* Extra buttons */}
+              <div className="grid grid-cols-3 gap-1.5">
+                <Button variant="outline" size="sm" className="text-xs h-9 bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/30" onClick={() => setExtraModalType("wide")}>
+                  Wide
+                </Button>
+                <Button variant="outline" size="sm" className="text-xs h-9 bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/30" onClick={() => setExtraModalType("noBall")}>
+                  NoBall
+                </Button>
+                <Button variant="outline" size="sm" className="text-xs h-9 bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/30" onClick={() => setExtraModalType("byes")}>
+                  Bye
+                </Button>
+                <Button variant="outline" size="sm" className="text-xs h-9 bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/30" onClick={() => setExtraModalType("legByes")}>
+                  Leg Bye
+                </Button>
+                <Button variant="destructive" size="sm" className="text-xs h-9" onClick={() => setWicketModalOpen(true)}>
+                  Out
+                </Button>
+                <Button variant="outline" size="sm" className="text-xs h-9" onClick={handleUndo}>
+                  Undo Previous Ball
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Extra Runs Modal */}
+        {extraModalType && (
+          <ExtraRunsModal
+            type={extraModalType}
+            onConfirm={handleExtraScore}
+            onCancel={() => setExtraModalType(null)}
+          />
+        )}
+
+        {/* Wicket Modal */}
+        {wicketModalOpen && (
+          <WicketModal
+            scoringState={scoringState}
+            playerNames={playerNames}
+            onConfirm={handleWicketComplete}
+            onCancel={() => setWicketModalOpen(false)}
+            onUpdatePlayerName={updatePlayerName}
+          />
+        )}
       </div>
     )
   }
 
-  // Default: show setup
   return null
 }
 
-// Player Selection sub-component
-function PlayerSelectionControls({
-  scoringState,
-  matchSetup,
-  onSelectStriker,
-  onSelectNonStriker,
-  onSelectBowler,
-  onStart,
-}: {
-  scoringState: ScoringState | null
-  matchSetup: MatchSetupData
-  onSelectStriker: (name: string) => void
-  onSelectNonStriker: (name: string) => void
-  onSelectBowler: (name: string) => void
-  onStart: () => void
+// Player name input component
+function PlayerNameInput({ playerId, currentName, onUpdate }: {
+  playerId: string
+  currentName?: string
+  onUpdate: (id: string, name: string) => void
 }) {
-  if (!scoringState) return null
+  const [name, setName] = useState(currentName ?? "")
 
-  const availableBatters = scoringState.batters
-    .filter((b) => !b.isOut)
-    .map((b) => b.name)
-
-  const availableBowlers = scoringState.bowlers.map((b) => b.name)
-
-  const canStart = scoringState.striker && scoringState.nonStriker && scoringState.currentBowler
+  const handleSave = () => {
+    if (name.trim()) {
+      onUpdate(playerId, name.trim())
+    }
+  }
 
   return (
-    <div className="space-y-2.5 pt-2">
-      <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground">Striker</label>
-        <Select value={scoringState.striker ?? ""} onValueChange={onSelectStriker}>
-          <SelectTrigger className="w-full text-xs h-7">
-            <SelectValue placeholder="Select striker" />
-          </SelectTrigger>
-          <SelectContent>
-            {availableBatters
-              .filter((n) => n !== scoringState.nonStriker)
-              .map((name) => (
-                <SelectItem key={name} value={name}>{name}</SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground">Non-Striker</label>
-        <Select value={scoringState.nonStriker ?? ""} onValueChange={onSelectNonStriker}>
-          <SelectTrigger className="w-full text-xs h-7">
-            <SelectValue placeholder="Select non-striker" />
-          </SelectTrigger>
-          <SelectContent>
-            {availableBatters
-              .filter((n) => n !== scoringState.striker)
-              .map((name) => (
-                <SelectItem key={name} value={name}>{name}</SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground">Bowler</label>
-        <Select value={scoringState.currentBowler ?? ""} onValueChange={onSelectBowler}>
-          <SelectTrigger className="w-full text-xs h-7">
-            <SelectValue placeholder="Select bowler" />
-          </SelectTrigger>
-          <SelectContent>
-            {availableBowlers.map((name) => (
-              <SelectItem key={name} value={name}>{name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <Button
-        className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-        disabled={!canStart}
-        onClick={onStart}
-      >
-        Begin Scoring
-      </Button>
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs text-muted-foreground whitespace-nowrap">{playerId}</span>
+      <Input
+        className="h-6 text-xs flex-1"
+        placeholder="Player name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSave() } }}
+      />
     </div>
   )
 }

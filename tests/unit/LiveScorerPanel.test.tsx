@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, waitFor, act } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { LiveScorerPanel } from "@/features/live-scorer/live-scorer-panel"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -37,7 +37,7 @@ describe("LiveScorerPanel", () => {
     })
   })
 
-  describe("After match setup saved", () => {
+  describe("After match setup saved (missing toss/batting)", () => {
     beforeEach(() => {
       useDirectorStore.setState({
         liveScorerPhase: "setup",
@@ -45,11 +45,12 @@ describe("LiveScorerPanel", () => {
           venue: "Allan Border Field",
           teamA: "Brisbane Tigers",
           teamB: "Gold Coast Sharks",
-          playersA: Array.from({ length: 11 }, (_, i) => `TA${i + 1}`),
-          playersB: Array.from({ length: 11 }, (_, i) => `TB${i + 1}`),
+          playersA: Array.from({ length: 11 }, (_, i) => `TAP${String(i + 1).padStart(2, "0")}`),
+          playersB: Array.from({ length: 11 }, (_, i) => `TBP${String(i + 1).padStart(2, "0")}`),
           overs: 20,
           tossWinner: "",
           battingFirst: "",
+          playerNames: {},
         },
         scoringState: null,
       })
@@ -65,15 +66,9 @@ describe("LiveScorerPanel", () => {
       expect(screen.getByText(/Allan Border Field/i)).toBeDefined()
     })
 
-    it("shows No Data Available for missing toss", () => {
+    it("shows total innings overs", () => {
       renderWithProviders(<LiveScorerPanel />)
-      const noDataElements = screen.getAllByText(/No Data Available/i)
-      expect(noDataElements.length).toBeGreaterThanOrEqual(1)
-    })
-
-    it("shows Start Scoring button", () => {
-      renderWithProviders(<LiveScorerPanel />)
-      expect(screen.getByRole("button", { name: /Start Scoring/i })).toBeDefined()
+      expect(screen.getByText(/Total Innings Overs - 20/i)).toBeDefined()
     })
 
     it("shows Complete Setup button when toss/batting missing", () => {
@@ -82,19 +77,20 @@ describe("LiveScorerPanel", () => {
     })
   })
 
-  describe("Player selection phase", () => {
+  describe("After match setup with toss/batting (player selection)", () => {
     beforeEach(() => {
       useDirectorStore.setState({
-        liveScorerPhase: "playerSelect",
+        liveScorerPhase: "setup",
         matchSetup: {
           venue: "Allan Border Field",
           teamA: "Brisbane Tigers",
           teamB: "Gold Coast Sharks",
-          playersA: Array.from({ length: 11 }, (_, i) => `TA${i + 1}`),
-          playersB: Array.from({ length: 11 }, (_, i) => `TB${i + 1}`),
+          playersA: Array.from({ length: 11 }, (_, i) => `TAP${String(i + 1).padStart(2, "0")}`),
+          playersB: Array.from({ length: 11 }, (_, i) => `TBP${String(i + 1).padStart(2, "0")}`),
           overs: 20,
           tossWinner: "Team A",
           battingFirst: "Team A",
+          playerNames: {},
         },
         scoringState: {
           runs: 0,
@@ -106,16 +102,16 @@ describe("LiveScorerPanel", () => {
           battingTeam: "Brisbane Tigers",
           bowlingTeam: "Gold Coast Sharks",
           striker: null,
-          nonStriker: null,
+          runner: null,
           currentBowler: null,
           batters: Array.from({ length: 11 }, (_, i) => ({
-            name: `TA${i + 1}`,
+            name: `TAP${String(i + 1).padStart(2, "0")}`,
             runs: 0,
             balls: 0,
             isOut: false,
           })),
           bowlers: Array.from({ length: 11 }, (_, i) => ({
-            name: `TB${i + 1}`,
+            name: `TBP${String(i + 1).padStart(2, "0")}`,
             runsConceded: 0,
             wickets: 0,
             balls: 0,
@@ -123,30 +119,46 @@ describe("LiveScorerPanel", () => {
           currentOverBalls: [],
           history: [],
           initialStriker: null,
-          initialNonStriker: null,
+          initialRunner: null,
           initialBowler: null,
+          inningsNumber: 1,
+          firstInningsScore: null,
+          firstInningsOvers: 0,
+          firstInningsBalls: 0,
+          firstInningsWickets: 0,
+          firstInningsRuns: 0,
+          isSecondInnings: false,
+          ballsRemaining: 120,
+          inningsEnded: false,
         },
       })
     })
 
-    it("shows striker selector", () => {
+    it("shows Batter selector", () => {
       renderWithProviders(<LiveScorerPanel />)
-      expect(screen.getByText("Striker")).toBeDefined()
+      expect(screen.getByText("Batter")).toBeDefined()
     })
 
-    it("shows non-striker selector", () => {
+    it("shows Runner selector", () => {
       renderWithProviders(<LiveScorerPanel />)
-      expect(screen.getByText("Non-Striker")).toBeDefined()
+      expect(screen.getByText("Runner")).toBeDefined()
     })
 
-    it("shows bowler selector", () => {
+    it("shows Bowler selector", () => {
       renderWithProviders(<LiveScorerPanel />)
       expect(screen.getByText("Bowler")).toBeDefined()
     })
 
-    it("shows Begin Scoring button", () => {
+    it("shows disabled Start Scoring button when players not selected", () => {
       renderWithProviders(<LiveScorerPanel />)
-      expect(screen.getByRole("button", { name: /Begin Scoring/i })).toBeDefined()
+      const btn = screen.getByRole("button", { name: /Start Scoring/i })
+      expect(btn.hasAttribute("disabled")).toBe(true)
+    })
+
+    it("shows toss and batting info", () => {
+      renderWithProviders(<LiveScorerPanel />)
+      expect(screen.getByText(/Toss Won By - Brisbane Tigers/i)).toBeDefined()
+      expect(screen.getByText(/Batting First - Brisbane Tigers/i)).toBeDefined()
     })
   })
 
@@ -158,11 +170,12 @@ describe("LiveScorerPanel", () => {
           venue: "Allan Border Field",
           teamA: "Brisbane Tigers",
           teamB: "Gold Coast Sharks",
-          playersA: Array.from({ length: 11 }, (_, i) => `TA${i + 1}`),
-          playersB: Array.from({ length: 11 }, (_, i) => `TB${i + 1}`),
+          playersA: Array.from({ length: 11 }, (_, i) => `TAP${String(i + 1).padStart(2, "0")}`),
+          playersB: Array.from({ length: 11 }, (_, i) => `TBP${String(i + 1).padStart(2, "0")}`),
           overs: 20,
           tossWinner: "Team A",
           battingFirst: "Team A",
+          playerNames: {},
         },
         scoringState: {
           runs: 0,
@@ -173,26 +186,35 @@ describe("LiveScorerPanel", () => {
           target: 0,
           battingTeam: "Brisbane Tigers",
           bowlingTeam: "Gold Coast Sharks",
-          striker: "TA1",
-          nonStriker: "TA2",
-          currentBowler: "TB1",
+          striker: "TAP01",
+          runner: "TAP02",
+          currentBowler: "TBP01",
           batters: Array.from({ length: 11 }, (_, i) => ({
-            name: `TA${i + 1}`,
+            name: `TAP${String(i + 1).padStart(2, "0")}`,
             runs: 0,
             balls: 0,
             isOut: false,
           })),
           bowlers: Array.from({ length: 11 }, (_, i) => ({
-            name: `TB${i + 1}`,
+            name: `TBP${String(i + 1).padStart(2, "0")}`,
             runsConceded: 0,
             wickets: 0,
             balls: 0,
           })),
           currentOverBalls: [],
           history: [],
-          initialStriker: "TA1",
-          initialNonStriker: "TA2",
-          initialBowler: "TB1",
+          initialStriker: "TAP01",
+          initialRunner: "TAP02",
+          initialBowler: "TBP01",
+          inningsNumber: 1,
+          firstInningsScore: null,
+          firstInningsOvers: 0,
+          firstInningsBalls: 0,
+          firstInningsWickets: 0,
+          firstInningsRuns: 0,
+          isSecondInnings: false,
+          ballsRemaining: 120,
+          inningsEnded: false,
         },
       })
     })
@@ -200,29 +222,28 @@ describe("LiveScorerPanel", () => {
     it("shows scoreboard with team and score", () => {
       renderWithProviders(<LiveScorerPanel />)
       expect(screen.getByText("Brisbane Tigers")).toBeDefined()
-      // Score appears in both the main score and bowler stats; check at least one exists
       const scoreElements = screen.getAllByText("0/0")
       expect(scoreElements.length).toBeGreaterThanOrEqual(1)
     })
 
-    it("shows striker info", () => {
+    it("shows batter info", () => {
       renderWithProviders(<LiveScorerPanel />)
-      expect(screen.getByText("TA1")).toBeDefined()
+      expect(screen.getByText("TAP01")).toBeDefined()
     })
 
-    it("shows non-striker info", () => {
+    it("shows runner info", () => {
       renderWithProviders(<LiveScorerPanel />)
-      expect(screen.getByText("TA2")).toBeDefined()
+      expect(screen.getByText("TAP02")).toBeDefined()
     })
 
     it("shows bowler info", () => {
       renderWithProviders(<LiveScorerPanel />)
-      expect(screen.getByText("TB1")).toBeDefined()
+      expect(screen.getByText("TBP01")).toBeDefined()
     })
 
-    it("shows run buttons 0-6", () => {
+    it("shows run buttons 1-6", () => {
       renderWithProviders(<LiveScorerPanel />)
-      for (let i = 0; i <= 6; i++) {
+      for (let i = 1; i <= 6; i++) {
         expect(screen.getByRole("button", { name: String(i) })).toBeDefined()
       }
     })
@@ -230,11 +251,11 @@ describe("LiveScorerPanel", () => {
     it("shows extra buttons", () => {
       renderWithProviders(<LiveScorerPanel />)
       expect(screen.getByRole("button", { name: /Wide/i })).toBeDefined()
-      expect(screen.getByRole("button", { name: /No Ball/i })).toBeDefined()
-      expect(screen.getByRole("button", { name: "Byes" })).toBeDefined()
-      expect(screen.getByRole("button", { name: /Leg Byes/i })).toBeDefined()
-      expect(screen.getByRole("button", { name: /Wicket/i })).toBeDefined()
-      expect(screen.getByRole("button", { name: /Undo/i })).toBeDefined()
+      expect(screen.getByRole("button", { name: /NoBall/i })).toBeDefined()
+      expect(screen.getByRole("button", { name: "Bye" })).toBeDefined()
+      expect(screen.getByRole("button", { name: /Leg Bye/i })).toBeDefined()
+      expect(screen.getByRole("button", { name: /Out/i })).toBeDefined()
+      expect(screen.getByRole("button", { name: /Undo Previous Ball/i })).toBeDefined()
     })
 
     it("updates score when run button clicked", async () => {
@@ -243,7 +264,6 @@ describe("LiveScorerPanel", () => {
 
       await user.click(screen.getByRole("button", { name: "4" }))
 
-      // Score should update via store
       const state = useDirectorStore.getState().scoringState
       expect(state!.runs).toBe(4)
     })
