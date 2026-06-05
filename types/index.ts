@@ -11,7 +11,51 @@ export interface CameraDevice {
 
 export type CameraStatus = "connected" | "connecting" | "disconnected" | "error"
 
-// Score types
+// PlayHQ types
+export type MockScenario = "single-match" | "multiple-matches" | "no-matches" | "connection-failure"
+
+export interface PlayHQConnectionFields {
+  tenant: string
+  clientId: string
+  clientSecret: string
+  organisationId: string
+}
+
+export interface PlayHQConnectionResult {
+  connected: boolean
+  tenant?: string
+  organisationId?: string
+  error?: string
+}
+
+export interface PlayHQLiveMatch {
+  id: string
+  name: string
+}
+
+export interface PlayHQScorecard {
+  matchId: string
+  homeTeam: string
+  awayTeam: string
+  innings: {
+    score: string
+    overs: string
+  }
+  batter: {
+    name: string
+    runs: number
+    balls: number
+  }
+  bowler: {
+    name: string
+    wickets: number
+    runsConceded: number
+  }
+}
+
+export type PlayHQConnectionStatus = "disconnected" | "connecting" | "connected" | "error"
+
+// Score types (legacy, kept for ScoreOverlay compat)
 export interface MatchData {
   id: string
   homeTeam: string

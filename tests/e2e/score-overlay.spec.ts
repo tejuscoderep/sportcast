@@ -1,31 +1,44 @@
 import { test, expect } from "@playwright/test"
 
 /**
- * Score overlay and live score update tests.
- * Verifies the ScoreOverlay component renders on the program feed and
- * that the mock score provider drives real-time updates.
+ * Score overlay tests.
+ * Verifies the ScoreOverlay component renders on the program feed after
+ * a PlayHQ connection is established.
  */
 
-test.describe("Score overlay – visibility", () => {
+async function connectPlayHQ(page: import("@playwright/test").Page) {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto("/")
+  await page.waitForTimeout(300)
+
+  await page.getByRole("button", { name: /^Connect$/i }).click()
+
+  const tenantSelect = page.locator("#playhq-tenant").or(page.getByRole("combobox").first())
+  await tenantSelect.click()
+  await page.getByText("Cricket Queensland").click()
+  await page.getByLabel("Client ID").fill("test-client-id")
+  await page.getByLabel("Client Secret").fill("test-client-secret")
+  await page.getByLabel(/Club.*Organisation ID/i).fill("CQ12345")
+
+  const modalConnectBtns = page.getByRole("button", { name: /^Connect$/i })
+  await modalConnectBtns.last().click()
+  await page.waitForTimeout(2500)
+}
+
+test.describe("Score overlay – visibility after connection", () => {
   test.beforeEach(async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 })
-    await page.goto("/")
-    // Allow mock score provider to populate data
-    await page.waitForTimeout(500)
+    await connectPlayHQ(page)
   })
 
   test("score overlay displays team name abbreviation", async ({ page }) => {
-    // ScoreOverlay shows last word of homeTeam e.g. "Tigers"
-    await expect(page.getByText(/Tigers|Brisbane/i).first()).toBeVisible()
+    await expect(page.getByText(/Tigers/i).first()).toBeVisible()
   })
 
-  test("score overlay shows runs and wickets", async ({ page }) => {
-    // e.g. "145" and "/4"
-    await expect(page.locator("text=/\\d+/").first()).toBeVisible()
+  test("score overlay shows score", async ({ page }) => {
+    await expect(page.locator("text=/\\d+\\/\\d+/").first()).toBeVisible()
   })
 
-  test("overlay toggle switch is present in match info panel", async ({ page }) => {
-    // There's a Switch component for overlay visibility
+  test("overlay toggle switch is present", async ({ page }) => {
     await expect(page.locator("button[role='switch']").or(page.locator("[data-slot='switch']"))).toBeVisible()
   })
 
@@ -39,56 +52,13 @@ test.describe("Score overlay – visibility", () => {
   })
 })
 
-test.describe("Score overlay – live updates", () => {
-  test("score updates after 5 seconds from mock provider", async ({ page }) => {
+test.describe("Score overlay – no overlay before connection", () => {
+  test("score overlay is not visible when not connected", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto("/")
-    await page.waitForTimeout(500)
-
-    // Capture initial score text from the first score-pattern match
-    const scoreEl = page.locator("text=/\\d+\\/\\d+/").first()
-    const initialScore = await scoreEl.textContent()
-
-    // Wait for mock provider update (fires every 5 seconds)
-    await page.waitForTimeout(6000)
-
-    const updatedScore = await scoreEl.textContent()
-    // Score should have changed (runs increase each ball)
-    expect(updatedScore).not.toBe(initialScore)
-  })
-
-  test("current batter name is displayed", async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 })
-    await page.goto("/")
-    await page.waitForTimeout(500)
-
-    // MockScoreProvider uses names from batters array: Smith, Warner, etc.
-    const batterNames = ["Smith", "Warner", "Labuschagne", "Head", "Carey"]
-    let found = false
-    for (const name of batterNames) {
-      const count = await page.getByText(name).count()
-      if (count > 0) {
-        found = true
-        break
-      }
-    }
-    expect(found).toBe(true)
-  })
-
-  test("current bowler name is displayed", async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 })
-    await page.goto("/")
-    await page.waitForTimeout(500)
-
-    const bowlerNames = ["Johnson", "Starc", "Cummins", "Hazlewood", "Richardson"]
-    let found = false
-    for (const name of bowlerNames) {
-      const count = await page.getByText(name).count()
-      if (count > 0) {
-        found = true
-        break
-      }
-    }
-    expect(found).toBe(true)
+    await page.waitForTimeout(300)
+    // Score overlay should NOT be visible (PlayHQ not connected)
+    const tigers = await page.getByText(/Tigers/i).count()
+    expect(tigers).toBe(0)
   })
 })

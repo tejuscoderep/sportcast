@@ -8,15 +8,16 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
+import { PlayHQConnection } from "@/features/playhq"
+import { usePlayHQConnection } from "@/hooks/use-playhq-connection"
+import type { PlayHQConnectionFormValues } from "@/lib/schemas/playHQConnectionSchema"
+import { useDirectorStore } from "@/store"
 
 interface IntegrationFields {
-  playhqApiUrl: string
-  playhqApiKey: string
   youtubeStreamKey: string
   youtubeClientId: string
   facebookStreamKey: string
@@ -26,8 +27,6 @@ interface IntegrationFields {
 const STORAGE_KEY = "sportcast-integrations"
 
 const DEFAULT_FIELDS: IntegrationFields = {
-  playhqApiUrl: "",
-  playhqApiKey: "",
   youtubeStreamKey: "",
   youtubeClientId: "",
   facebookStreamKey: "",
@@ -51,6 +50,10 @@ function saveFields(fields: IntegrationFields) {
 export function SettingsDialog({ children }: { children: ReactNode }) {
   const [fields, setFields] = useState<IntegrationFields>(DEFAULT_FIELDS)
   const [open, setOpen] = useState(false)
+  const connectionStatus = useDirectorStore((s) => s.playhqConnectionStatus)
+  const tenant = useDirectorStore((s) => s.playhqTenant)
+  const orgId = useDirectorStore((s) => s.playhqOrganisationId)
+  const { handleConnect } = usePlayHQConnection()
 
   useEffect(() => {
     if (open) setFields(loadFields())
@@ -65,6 +68,14 @@ export function SettingsDialog({ children }: { children: ReactNode }) {
     setOpen(false)
   }
 
+  const onPlayHQConnect = async (values: PlayHQConnectionFormValues) => {
+    const result = await handleConnect(values)
+    if (result.success) {
+      return { success: true }
+    }
+    return { success: false, error: result.error }
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={children} />
@@ -77,26 +88,24 @@ export function SettingsDialog({ children }: { children: ReactNode }) {
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* PlayHQ */}
+          {/* PlayHQ - reusable component */}
           <div className="space-y-2.5">
             <p className="text-sm font-medium text-foreground">PlayHQ Integration</p>
-            <div>
-              <label className="text-xs text-muted-foreground block mb-1">API URL</label>
-              <Input
-                placeholder="https://api.playhq.com"
-                value={fields.playhqApiUrl}
-                onChange={(e) => updateField("playhqApiUrl", e.target.value)}
+            {connectionStatus === "connected" ? (
+              <div className="flex items-center gap-2 text-sm text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                Connected to {tenant}
+              </div>
+            ) : (
+              <PlayHQConnection
+                onConnect={onPlayHQConnect}
+                onCancel={() => setOpen(false)}
+                initialValues={{
+                  tenant: tenant ?? undefined,
+                  organisationId: orgId ?? undefined,
+                }}
               />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground block mb-1">API Key</label>
-              <Input
-                type="password"
-                placeholder="Your PlayHQ API key"
-                value={fields.playhqApiKey}
-                onChange={(e) => updateField("playhqApiKey", e.target.value)}
-              />
-            </div>
+            )}
           </div>
 
           <Separator />
@@ -148,12 +157,14 @@ export function SettingsDialog({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <DialogFooter showCloseButton={false}>
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave}>Save</Button>
-        </DialogFooter>
+        {connectionStatus === "connected" && (
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={handleSave}>Save</Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

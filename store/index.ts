@@ -1,5 +1,11 @@
 import { create } from "zustand"
-import type { CameraDevice, MatchData, BroadcastState, LiveMatch } from "@/types"
+import type {
+  CameraDevice,
+  BroadcastState,
+  PlayHQConnectionStatus,
+  PlayHQLiveMatch,
+  PlayHQScorecard,
+} from "@/types"
 
 interface DirectorStore {
   // Camera state
@@ -8,11 +14,16 @@ interface DirectorStore {
   previewCameraId: string | null
   nextCameraId: number
 
-  // Match/Score state
-  matchData: MatchData | null
+  // PlayHQ state
+  playhqConnectionStatus: PlayHQConnectionStatus
+  playhqTenant: string | null
+  playhqOrganisationId: string | null
+  playhqLiveMatches: PlayHQLiveMatch[]
+  playhqSelectedMatchId: string | null
+  playhqScorecard: PlayHQScorecard | null
+
+  // Overlay state
   overlayVisible: boolean
-  matches: LiveMatch[]
-  selectedMatchId: string | null
 
   // Broadcast state
   broadcastState: BroadcastState
@@ -29,12 +40,17 @@ interface DirectorStore {
   setPreviewCamera: (cameraId: string) => void
   updateCamera: (cameraId: string, updates: Partial<CameraDevice>) => void
 
-  // Actions - Match
-  setMatchData: (data: MatchData) => void
+  // Actions - PlayHQ
+  setPlayHQConnectionStatus: (status: PlayHQConnectionStatus) => void
+  setPlayHQConnected: (tenant: string, organisationId: string) => void
+  setPlayHQDisconnected: () => void
+  setPlayHQLiveMatches: (matches: PlayHQLiveMatch[]) => void
+  setPlayHQSelectedMatchId: (id: string | null) => void
+  setPlayHQScorecard: (scorecard: PlayHQScorecard | null) => void
+
+  // Actions - Overlay
   toggleOverlay: () => void
   setOverlayVisible: (visible: boolean) => void
-  setMatches: (matches: LiveMatch[]) => void
-  setSelectedMatchId: (id: string) => void
 
   // Actions - Broadcast
   setBroadcastState: (state: Partial<BroadcastState>) => void
@@ -68,11 +84,16 @@ export const useDirectorStore = create<DirectorStore>((set) => ({
   previewCameraId: null,
   nextCameraId: 2,
 
-  // Initial match state
-  matchData: null,
+  // Initial PlayHQ state
+  playhqConnectionStatus: "disconnected",
+  playhqTenant: null,
+  playhqOrganisationId: null,
+  playhqLiveMatches: [],
+  playhqSelectedMatchId: null,
+  playhqScorecard: null,
+
+  // Overlay state
   overlayVisible: true,
-  matches: [],
-  selectedMatchId: null,
 
   // Initial broadcast state
   broadcastState: initialBroadcastState,
@@ -117,19 +138,39 @@ export const useDirectorStore = create<DirectorStore>((set) => ({
       ),
     })),
 
-  // Match actions
-  setMatchData: (data) => set(() => ({ matchData: data })),
+  // PlayHQ actions
+  setPlayHQConnectionStatus: (status) =>
+    set(() => ({ playhqConnectionStatus: status })),
+
+  setPlayHQConnected: (tenant, organisationId) =>
+    set(() => ({
+      playhqConnectionStatus: "connected",
+      playhqTenant: tenant,
+      playhqOrganisationId: organisationId,
+    })),
+
+  setPlayHQDisconnected: () =>
+    set(() => ({
+      playhqConnectionStatus: "disconnected",
+      playhqTenant: null,
+      playhqOrganisationId: null,
+      playhqLiveMatches: [],
+      playhqSelectedMatchId: null,
+      playhqScorecard: null,
+    })),
+
+  setPlayHQLiveMatches: (matches) =>
+    set(() => ({ playhqLiveMatches: matches })),
+
+  setPlayHQSelectedMatchId: (id) =>
+    set(() => ({ playhqSelectedMatchId: id })),
+
+  setPlayHQScorecard: (scorecard) =>
+    set(() => ({ playhqScorecard: scorecard })),
+
+  // Overlay actions
   toggleOverlay: () => set((state) => ({ overlayVisible: !state.overlayVisible })),
   setOverlayVisible: (visible) => set(() => ({ overlayVisible: visible })),
-  setMatches: (matches) => set(() => ({ matches })),
-  setSelectedMatchId: (id) =>
-    set((state) => {
-      const match = state.matches.find((m) => m.id === id)
-      return {
-        selectedMatchId: id,
-        matchData: match?.data ?? state.matchData,
-      }
-    }),
 
   // Broadcast actions
   setBroadcastState: (updates) =>

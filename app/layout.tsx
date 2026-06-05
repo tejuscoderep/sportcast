@@ -2,6 +2,7 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata } from 'next'
 import { Ubuntu } from 'next/font/google'
 import { QueryProvider } from '@/components/providers/query-provider'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import './globals.css'
 
 const ubuntu = Ubuntu({
@@ -41,7 +42,9 @@ export default function RootLayout({
     <html lang="en" className={`dark bg-background ${ubuntu.className}`}>
       <body className="antialiased min-h-screen">
         <QueryProvider>
-          {children}
+          <TooltipProvider>
+            {children}
+          </TooltipProvider>
         </QueryProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
