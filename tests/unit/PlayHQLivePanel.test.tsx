@@ -19,6 +19,7 @@ describe("PlayHQLivePanel (MatchInfoPanel)", () => {
       playhqLiveMatches: [],
       playhqSelectedMatchId: null,
       playhqScorecard: null,
+      expandedPanel: "playhq",
     })
     playhqService.setMockScenario("multiple-matches")
   })
@@ -29,7 +30,7 @@ describe("PlayHQLivePanel (MatchInfoPanel)", () => {
       expect(screen.getByText("Not Connected")).toBeDefined()
     })
 
-    it("shows Connect button", () => {
+    it("shows Connect button when expanded", () => {
       renderWithProviders(<MatchInfoPanel />)
       expect(screen.getByRole("button", { name: /^Connect$/i })).toBeDefined()
     })
@@ -49,6 +50,7 @@ describe("PlayHQLivePanel (MatchInfoPanel)", () => {
     beforeEach(() => {
       playhqService.setMockScenario("single-match")
       useDirectorStore.setState({
+        expandedPanel: "playhq",
         playhqConnectionStatus: "connected",
         playhqTenant: "Cricket Queensland",
         playhqOrganisationId: "CQ12345",
@@ -90,6 +92,7 @@ describe("PlayHQLivePanel (MatchInfoPanel)", () => {
   describe("Connected state with multiple matches", () => {
     beforeEach(() => {
       useDirectorStore.setState({
+        expandedPanel: "playhq",
         playhqConnectionStatus: "connected",
         playhqTenant: "Cricket Queensland",
         playhqOrganisationId: "CQ12345",
@@ -125,6 +128,7 @@ describe("PlayHQLivePanel (MatchInfoPanel)", () => {
     beforeEach(() => {
       playhqService.setMockScenario("no-matches")
       useDirectorStore.setState({
+        expandedPanel: "playhq",
         playhqConnectionStatus: "connected",
         playhqTenant: "Cricket Queensland",
         playhqOrganisationId: "CQ12345",
@@ -149,6 +153,7 @@ describe("PlayHQLivePanel (MatchInfoPanel)", () => {
   describe("Match selection updates scorecard", () => {
     it("updates scorecard when store state changes", () => {
       useDirectorStore.setState({
+        expandedPanel: "playhq",
         playhqConnectionStatus: "connected",
         playhqTenant: "Cricket Queensland",
         playhqOrganisationId: "CQ12345",
@@ -190,6 +195,14 @@ describe("PlayHQLivePanel (MatchInfoPanel)", () => {
       expect(screen.getByText("Sunshine Coast")).toBeDefined()
       expect(screen.getByText("Hughes")).toBeDefined()
       expect(screen.getByText("89/1")).toBeDefined()
+    })
+  })
+
+  describe("Collapsed state", () => {
+    it("shows collapsed view when not expanded", () => {
+      useDirectorStore.setState({ expandedPanel: "none" })
+      renderWithProviders(<MatchInfoPanel />)
+      expect(screen.getByText("PlayHQ Live")).toBeDefined()
     })
   })
 })

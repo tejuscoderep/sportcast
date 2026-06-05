@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select"
 import { useDirectorStore } from "@/store"
 import type { ScoringState, WicketType } from "@/types"
+import { loadLiveMatch } from "@/lib/live-scorer-storage"
 import { MatchSetupModal } from "./match-setup-modal"
 import { ExtraRunsModal } from "./extra-runs-modal"
 import { WicketModal } from "./wicket-modal"
@@ -30,9 +31,15 @@ import {
   setCurrentBowler,
   formatOvers,
   getDisplayName,
+  getRunRate,
+  getRequiredRunRate,
+  getBatterStrikeRate,
+  getBowlerEconomy,
+  formatBowlerFigures,
+  formatCurrentOver,
 } from "@/services/cricket-scoring-engine"
-import { ClipboardList, RotateCcw, Dices, Minus, Plus } from "lucide-react"
-import { useState } from "react"
+import { ClipboardList, RotateCcw, Dices, ChevronDown, ChevronUp, Play } from "lucide-react"
+import { useState, useEffect } from "react"
 
 export function LiveScorerPanel() {
   const phase = useDirectorStore((s) => s.liveScorerPhase)
@@ -44,22 +51,58 @@ export function LiveScorerPanel() {
   const resetScorer = useDirectorStore((s) => s.resetScorer)
   const gameType = useDirectorStore((s) => s.liveScorerGameType)
   const updatePlayerName = useDirectorStore((s) => s.updatePlayerName)
+  const restoreMatch = useDirectorStore((s) => s.restoreMatch)
+  const expandedPanel = useDirectorStore((s) => s.expandedPanel)
+  const setExpandedPanel = useDirectorStore((s) => s.setExpandedPanel)
   const playerNames = matchSetup?.playerNames ?? {}
 
   const [extraModalType, setExtraModalType] = useState<string | null>(null)
   const [wicketModalOpen, setWicketModalOpen] = useState(false)
+  const [resumeAvailable, setResumeAvailable] = useState(false)
+
+  // Check for persisted match on mount
+  useEffect(() => {
+    const saved = loadLiveMatch()
+    if (saved) {
+      setResumeAvailable(true)
+    }
+  }, [])
+
+  const handleResumeMatch = () => {
+    const saved = loadLiveMatch()
+    if (saved) {
+      restoreMatch({
+        matchSetup: saved.matchSetup,
+        scoringState: saved.scoringState,
+        liveScorerPhase: saved.liveScorerPhase,
+      })
+      setResumeAvailable(false)
+    }
+  }
+
+  const isExpanded = expandedPanel === "liveScorer"
+
+  const toggleExpand = () => {
+    if (isExpanded) {
+      setExpandedPanel("none")
+    } else {
+      setExpandedPanel("liveScorer")
+    }
+  }
 
   const handleStartScoring = () => {
     if (!matchSetup) return
     if (!matchSetup.tossWinner || !matchSetup.battingFirst) return
     if (!scoringState?.striker || !scoringState?.runner || !scoringState?.currentBowler) return
+    // Validate batter != runner
+    if (scoringState.striker === scoringState.runner) return
     setPhase("scoring")
+    setExpandedPanel("liveScorer")
   }
 
   const handleScoreRuns = (runs: number) => {
     if (!scoringState) return
-    const newState = scoreRuns(scoringState, runs)
-    setScoringState(newState)
+    setScoringState(scoreRuns(scoringState, runs))
   }
 
   const handleExtraScore = (type: string, runs: number) => {
@@ -115,8 +158,32 @@ export function LiveScorerPanel() {
     setWicketModalOpen(false)
   }
 
+  // Collapsed header-only view
+  const renderCollapsedHeader = (subtitle: string) => (
+    <Card className="bg-card/50">
+      <CardHeader className="pb-2 pt-3 px-4">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium tracking-wide flex items-center gap-2">
+            <ClipboardList className="w-4 h-4 text-blue-400" />
+            Live Scorer
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{subtitle}</span>
+            <Button variant="ghost" size="xs" onClick={toggleExpand} className="text-muted-foreground">
+              <ChevronDown className="w-3 h-3" />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+    </Card>
+  )
+
   // Setup phase (no match setup saved yet)
   if (phase === "setup" && !matchSetup) {
+    if (!isExpanded) {
+      return renderCollapsedHeader(gameType)
+    }
+
     return (
       <Card className="bg-card/50">
         <CardHeader className="pb-2 pt-3 px-4">
@@ -125,10 +192,21 @@ export function LiveScorerPanel() {
               <ClipboardList className="w-4 h-4 text-blue-400" />
               Live Scorer
             </CardTitle>
-            <Badge variant="outline" className="text-xs">{gameType}</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">{gameType}</Badge>
+              <Button variant="ghost" size="xs" onClick={toggleExpand} className="text-muted-foreground">
+                <ChevronUp className="w-3 h-3" />
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="px-4 pb-3 space-y-2">
+          {resumeAvailable && (
+            <Button className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleResumeMatch}>
+              <Play className="w-4 h-4" />
+              Resume Match
+            </Button>
+          )}
           <MatchSetupModal>
             <Button className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white">
               <Dices className="w-4 h-4" />
@@ -149,19 +227,31 @@ export function LiveScorerPanel() {
       ? (matchSetup.battingFirst === "Team A" ? matchSetup.teamA : matchSetup.teamB)
       : ""
     const missingSetup = !matchSetup.tossWinner || !matchSetup.battingFirst
-    const canStart = !missingSetup && scoringState?.striker && scoringState?.runner && scoringState?.currentBowler
+    const batterValid = !!scoringState?.striker
+    const runnerValid = !!scoringState?.runner && scoringState.striker !== scoringState.runner
+    const bowlerValid = !!scoringState?.currentBowler
+    const canStart = !missingSetup && batterValid && runnerValid && bowlerValid
 
     // Available players for batting team
     const battingPlayers = matchSetup.battingFirst === "Team B" ? matchSetup.playersB : matchSetup.playersA
     const bowlingPlayers = matchSetup.battingFirst === "Team B" ? matchSetup.playersA : matchSetup.playersB
 
+    if (!isExpanded) {
+      return renderCollapsedHeader(`${matchSetup.teamA} vs ${matchSetup.teamB}`)
+    }
+
     return (
       <Card className="bg-card/50">
         <CardHeader className="pb-2 pt-3 px-4">
-          <CardTitle className="text-sm font-medium tracking-wide flex items-center gap-2">
-            <ClipboardList className="w-4 h-4 text-blue-400" />
-            Live Scorer
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium tracking-wide flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-blue-400" />
+              Live Scorer
+            </CardTitle>
+            <Button variant="ghost" size="xs" onClick={toggleExpand} className="text-muted-foreground">
+              <ChevronUp className="w-3 h-3" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="px-4 pb-3 space-y-2">
           {/* Match details */}
@@ -259,13 +349,20 @@ export function LiveScorerPanel() {
     )
   }
 
-  // Scoring phase - expanded view
+  // Scoring phase
   if (phase === "scoring" && scoringState && matchSetup) {
     const striker = scoringState.batters.find((b) => b.name === scoringState.striker)
     const runner = scoringState.batters.find((b) => b.name === scoringState.runner)
     const bowler = scoringState.bowlers.find((b) => b.name === scoringState.currentBowler)
+    const runRate = getRunRate(scoringState)
+    const reqRate = getRequiredRunRate(scoringState)
+    const currentOverStr = formatCurrentOver(scoringState.currentOverBalls)
+    const prevOverStr = formatCurrentOver(scoringState.previousOverBalls)
+    const inningsOver = scoringState.inningsPhase === "COMPLETED" || scoringState.inningsPhase === "INNINGS_BREAK"
 
-    const inningsOver = scoringState.inningsEnded
+    if (!isExpanded) {
+      return renderCollapsedHeader(`${scoringState.runs}/${scoringState.wickets} (${formatOvers(scoringState)})`)
+    }
 
     return (
       <div className="flex flex-col gap-2 h-full">
@@ -277,10 +374,15 @@ export function LiveScorerPanel() {
                 <ClipboardList className="w-4 h-4 text-blue-400" />
                 Live Scorer
               </CardTitle>
-              <Button variant="ghost" size="xs" onClick={resetScorer} className="text-xs text-muted-foreground">
-                <RotateCcw className="w-3 h-3" />
-                Reset
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="xs" onClick={resetScorer} className="text-xs text-muted-foreground">
+                  <RotateCcw className="w-3 h-3" />
+                  Reset
+                </Button>
+                <Button variant="ghost" size="xs" onClick={toggleExpand} className="text-muted-foreground">
+                  <ChevronUp className="w-3 h-3" />
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="px-3 pb-2 space-y-2">
@@ -297,55 +399,84 @@ export function LiveScorerPanel() {
               </div>
             </div>
 
+            {/* Run Rate & Partnership */}
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Run Rate: {runRate.toFixed(2)}</span>
+              <span>Partnership: {scoringState.partnership}</span>
+            </div>
+
             {/* Target info for second innings */}
             {scoringState.isSecondInnings && scoringState.target > 0 && (
-              <div className="text-xs text-amber-400">
-                Target: {scoringState.target} | Need: {Math.max(0, scoringState.target - scoringState.runs)} | Balls left: {scoringState.ballsRemaining}
+              <div className="text-xs text-amber-400 space-y-0.5">
+                <p>Target: {scoringState.target} | Need: {Math.max(0, scoringState.target - scoringState.runs)} | Balls left: {scoringState.ballsRemaining}</p>
+                {reqRate !== null && <p>Required RR: {reqRate === Infinity ? "-" : reqRate.toFixed(2)}</p>}
               </div>
             )}
 
             <Separator className="bg-border/50" />
 
-            {/* Striker (Batter) */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Batter</p>
-                {striker ? (
+            {/* Batter */}
+            <div className="space-y-0.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Batter</p>
+              {striker ? (
+                <div>
                   <p className="text-sm text-foreground">
                     {getDisplayName(striker.name, playerNames)} <span className="tabular-nums text-muted-foreground">{striker.runs} ({striker.balls})</span>
                   </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Select new batter</p>
-                )}
-              </div>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {striker.fours}x4 {striker.sixes}x6 SR {getBatterStrikeRate(striker).toFixed(1)}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Select new batter</p>
+              )}
             </div>
 
             {/* Runner */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Runner</p>
-                {runner ? (
+            <div className="space-y-0.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Runner</p>
+              {runner ? (
+                <div>
                   <p className="text-sm text-foreground">
                     {getDisplayName(runner.name, playerNames)} <span className="tabular-nums text-muted-foreground">{runner.runs} ({runner.balls})</span>
                   </p>
-                ) : null}
-              </div>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {runner.fours}x4 {runner.sixes}x6 SR {getBatterStrikeRate(runner).toFixed(1)}
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             <Separator className="bg-border/50" />
 
             {/* Bowler */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Bowler</p>
-                {bowler ? (
+            <div className="space-y-0.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Bowler</p>
+              {bowler ? (
+                <div>
                   <p className="text-sm text-foreground">
-                    {getDisplayName(bowler.name, playerNames)} <span className="tabular-nums text-muted-foreground">{bowler.wickets}/{bowler.runsConceded} ({bowler.balls})</span>
+                    {getDisplayName(bowler.name, playerNames)}
                   </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Select bowler</p>
-                )}
-              </div>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {formatBowlerFigures(bowler)} Eco {getBowlerEconomy(bowler).toFixed(2)}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Select bowler</p>
+              )}
+            </div>
+
+            {/* Ball history */}
+            <Separator className="bg-border/50" />
+            <div className="space-y-0.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Current Over</p>
+              <p className="text-xs tabular-nums text-foreground font-mono">{currentOverStr || "-"}</p>
+              {prevOverStr && (
+                <>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Previous Over</p>
+                  <p className="text-xs tabular-nums text-muted-foreground font-mono">{prevOverStr}</p>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -355,9 +486,9 @@ export function LiveScorerPanel() {
           <Card className="bg-amber-500/10 border-amber-500/30 shrink-0">
             <CardContent className="p-3 text-center">
               <p className="text-sm font-medium text-amber-400">
-                {scoringState.isSecondInnings ? "Match Over" : "Innings Break - Second Innings Starting"}
+                {scoringState.inningsPhase === "COMPLETED" ? "Match Over" : "Innings Break - Second Innings Starting"}
               </p>
-              {scoringState.firstInningsScore !== null && (
+              {scoringState.firstInningsRuns > 0 && (
                 <p className="text-xs text-muted-foreground mt-1">
                   First Innings: {scoringState.firstInningsRuns}/{scoringState.firstInningsWickets} ({scoringState.firstInningsOvers}.{scoringState.firstInningsBalls})
                 </p>
@@ -434,7 +565,6 @@ export function LiveScorerPanel() {
   return null
 }
 
-// Player name input component
 function PlayerNameInput({ playerId, currentName, onUpdate }: {
   playerId: string
   currentName?: string

@@ -15,7 +15,7 @@ import {
 import { useDirectorStore } from "@/store"
 import { usePlayHQConnection } from "@/hooks/use-playhq-connection"
 import { PlayHQConnectionModal } from "@/features/playhq"
-import { Tv, Plug } from "lucide-react"
+import { Tv, Plug, ChevronDown, ChevronUp } from "lucide-react"
 
 export function MatchInfoPanel() {
   const connectionStatus = useDirectorStore((s) => s.playhqConnectionStatus)
@@ -24,10 +24,55 @@ export function MatchInfoPanel() {
   const scorecard = useDirectorStore((s) => s.playhqScorecard)
   const overlayVisible = useDirectorStore((s) => s.overlayVisible)
   const toggleOverlay = useDirectorStore((s) => s.toggleOverlay)
+  const expandedPanel = useDirectorStore((s) => s.expandedPanel)
+  const setExpandedPanel = useDirectorStore((s) => s.setExpandedPanel)
   const { selectMatch, disconnect } = usePlayHQConnection()
 
+  const isExpanded = expandedPanel === "playhq"
+  const isConnected = connectionStatus === "connected"
+
+  const toggleExpand = () => {
+    if (isExpanded) {
+      setExpandedPanel("none")
+    } else {
+      setExpandedPanel("playhq")
+    }
+  }
+
+  // Collapsed view
+  if (!isExpanded) {
+    return (
+      <Card className="border-emerald-500/30 bg-card/50">
+        <CardHeader className="pb-2 pt-3 px-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium tracking-wide text-emerald-400 flex items-center gap-2">
+              <Tv className="w-4 h-4" />
+              PlayHQ Live
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {isConnected ? (
+                <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50 text-xs">
+                  <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  Connected
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-secondary/50 text-muted-foreground border-border text-xs">
+                  Not Connected
+                </Badge>
+              )}
+              <Button variant="ghost" size="xs" onClick={toggleExpand} className="text-muted-foreground">
+                <ChevronDown className="w-3 h-3" />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+    )
+  }
+
+  // Expanded view
   return (
-    <div className="flex flex-col gap-3 h-full">
+    <div className="flex flex-col gap-3">
       {/* PlayHQ Header */}
       <Card className="border-emerald-500/30 bg-card/50">
         <CardHeader className="pb-2 pt-3 px-4">
@@ -36,26 +81,31 @@ export function MatchInfoPanel() {
               <Tv className="w-4 h-4" />
               PlayHQ Live
             </CardTitle>
-            {connectionStatus === "connected" ? (
-              <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50 text-xs">
-                <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                Connected
-              </Badge>
-            ) : connectionStatus === "connecting" ? (
-              <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/50 text-xs">
-                <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-                Connecting
-              </Badge>
-            ) : connectionStatus === "error" ? (
-              <Badge variant="outline" className="bg-red-500/20 text-red-400 border-red-500/50 text-xs">
-                <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-red-400" />
-                Error
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="bg-secondary/50 text-muted-foreground border-border text-xs">
-                Not Connected
-              </Badge>
-            )}
+            <div className="flex items-center gap-2">
+              {isConnected ? (
+                <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50 text-xs">
+                  <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  Connected
+                </Badge>
+              ) : connectionStatus === "connecting" ? (
+                <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/50 text-xs">
+                  <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  Connecting
+                </Badge>
+              ) : connectionStatus === "error" ? (
+                <Badge variant="outline" className="bg-red-500/20 text-red-400 border-red-500/50 text-xs">
+                  <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-red-400" />
+                  Error
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-secondary/50 text-muted-foreground border-border text-xs">
+                  Not Connected
+                </Badge>
+              )}
+              <Button variant="ghost" size="xs" onClick={toggleExpand} className="text-muted-foreground">
+                <ChevronUp className="w-3 h-3" />
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="px-4 pb-3 space-y-2">
@@ -75,7 +125,7 @@ export function MatchInfoPanel() {
               </Button>
             </PlayHQConnectionModal>
           )}
-          {connectionStatus === "connected" && (
+          {isConnected && (
             <>
               {/* Match Selector */}
               <div className="space-y-1">
@@ -114,8 +164,8 @@ export function MatchInfoPanel() {
       </Card>
 
       {/* Scorecard */}
-      {connectionStatus === "connected" && scorecard && (
-        <Card className="flex-1 bg-card/50">
+      {isConnected && scorecard && (
+        <Card className="bg-card/50">
           <CardContent className="p-4 space-y-4">
             {/* Home Team */}
             <div>
@@ -188,7 +238,7 @@ export function MatchInfoPanel() {
       )}
 
       {/* Placeholder when connected but no scorecard */}
-      {connectionStatus === "connected" && !scorecard && liveMatches.length === 0 && (
+      {isConnected && !scorecard && liveMatches.length === 0 && (
         <Card className="bg-card/50">
           <CardContent className="p-4 text-center text-muted-foreground text-sm">
             No live matches available

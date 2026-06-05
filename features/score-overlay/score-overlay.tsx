@@ -1,7 +1,7 @@
 "use client"
 
 import { useDirectorStore } from "@/store"
-import { getOverlayModel } from "@/services/cricket-scoring-engine"
+import { getOverlayModel, getDisplayName } from "@/services/cricket-scoring-engine"
 
 export function ScoreOverlay() {
   const playhqScorecard = useDirectorStore((s) => s.playhqScorecard)
@@ -9,6 +9,8 @@ export function ScoreOverlay() {
   const scoringState = useDirectorStore((s) => s.scoringState)
   const liveScorerPhase = useDirectorStore((s) => s.liveScorerPhase)
   const overlayVisible = useDirectorStore((s) => s.overlayVisible)
+  const matchSetup = useDirectorStore((s) => s.matchSetup)
+  const playerNames = matchSetup?.playerNames ?? {}
 
   if (!overlayVisible) return null
 
@@ -51,6 +53,12 @@ export function ScoreOverlay() {
         </div>
         <div className="mt-1.5 inline-flex items-center gap-2 bg-black/50 backdrop-blur-sm rounded px-2.5 py-1 border border-white/5">
           <span className="text-white/60 text-xs">{model.bowlingTeam.split(" ").pop()}</span>
+          {model.currentRunRate > 0 && (
+            <span className="text-white/40 text-xs">RR {model.currentRunRate.toFixed(2)}</span>
+          )}
+          {model.target !== null && model.target > 0 && (
+            <span className="text-amber-400 text-xs">Need {Math.max(0, model.target - scoringState.runs)}</span>
+          )}
         </div>
       </div>
     )

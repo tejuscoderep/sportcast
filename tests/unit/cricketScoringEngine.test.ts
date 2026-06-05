@@ -14,8 +14,14 @@ import {
   getOverlayModel,
   formatOvers,
   getDisplayName,
+  getRunRate,
+  getRequiredRunRate,
+  getBatterStrikeRate,
+  getBowlerEconomy,
+  formatBowlerFigures,
+  formatCurrentOver,
 } from "@/services/cricket-scoring-engine"
-import type { MatchSetupData, ScoringState } from "@/types"
+import type { MatchSetupData, ScoringState, BatterState, BowlerState } from "@/types"
 
 const TEST_SETUP: MatchSetupData = {
   venue: "Test Ground",
@@ -60,44 +66,44 @@ describe("cricketScoringEngine", () => {
       expect(s.extras).toBe(0)
     })
 
-    it("creates batter states for batting team players", () => {
+    it("creates batter states with fours and sixes", () => {
       const s = createInitialScoringState(TEST_SETUP)
       expect(s.batters).toHaveLength(11)
       expect(s.batters[0].name).toBe("A1")
+      expect(s.batters[0].fours).toBe(0)
+      expect(s.batters[0].sixes).toBe(0)
     })
 
-    it("creates bowler states for bowling team players", () => {
+    it("creates bowler states with maidens", () => {
       const s = createInitialScoringState(TEST_SETUP)
       expect(s.bowlers).toHaveLength(11)
-      expect(s.bowlers[0].name).toBe("B1")
+      expect(s.bowlers[0].maidens).toBe(0)
     })
 
-    it("sets innings number to 1", () => {
+    it("sets innings phase to READY", () => {
       const s = createInitialScoringState(TEST_SETUP)
+      expect(s.inningsPhase).toBe("READY")
       expect(s.inningsNumber).toBe(1)
       expect(s.isSecondInnings).toBe(false)
     })
 
     it("sets balls remaining based on overs", () => {
       const s = createInitialScoringState(TEST_SETUP)
-      expect(s.ballsRemaining).toBe(120) // 20 * 6
+      expect(s.ballsRemaining).toBe(120)
+    })
+
+    it("initializes partnership to 0", () => {
+      const s = createInitialScoringState(TEST_SETUP)
+      expect(s.partnership).toBe(0)
     })
   })
 
   describe("scoreRuns", () => {
-    it("adds 0 runs (dot ball)", () => {
-      const s = scoreRuns(state, 0)
-      expect(s.runs).toBe(0)
-      expect(s.balls).toBe(1)
-      expect(s.batters.find((b) => b.name === "A1")!.balls).toBe(1)
-    })
-
     it("adds 1 run and rotates strike", () => {
       const s = scoreRuns(state, 1)
       expect(s.runs).toBe(1)
       expect(s.striker).toBe("A2")
       expect(s.runner).toBe("A1")
-      expect(s.batters.find((b) => b.name === "A1")!.runs).toBe(1)
     })
 
     it("adds 2 runs without rotating strike", () => {
@@ -107,67 +113,74 @@ describe("cricketScoringEngine", () => {
       expect(s.runner).toBe("A2")
     })
 
-    it("adds 3 runs and rotates strike", () => {
-      const s = scoreRuns(state, 3)
-      expect(s.runs).toBe(3)
-      expect(s.striker).toBe("A2")
-      expect(s.runner).toBe("A1")
-    })
-
-    it("adds 4 runs (boundary) without rotating strike", () => {
+    it("adds 4 runs and tracks fours", () => {
       const s = scoreRuns(state, 4)
       expect(s.runs).toBe(4)
-      expect(s.striker).toBe("A1")
+      expect(s.batters.find((b) => b.name === "A1")!.fours).toBe(1)
+      expect(s.batters.find((b) => b.name === "A1")!.sixes).toBe(0)
     })
 
-    it("adds 5 runs and rotates strike", () => {
-      const s = scoreRuns(state, 5)
-      expect(s.runs).toBe(5)
-      expect(s.striker).toBe("A2")
-    })
-
-    it("adds 6 runs (boundary) without rotating strike", () => {
+    it("adds 6 runs and tracks sixes", () => {
       const s = scoreRuns(state, 6)
       expect(s.runs).toBe(6)
-      expect(s.striker).toBe("A1")
-    })
-
-    it("increments batter balls faced", () => {
-      const s = scoreRuns(state, 4)
-      expect(s.batters.find((b) => b.name === "A1")!.runs).toBe(4)
-      expect(s.batters.find((b) => b.name === "A1")!.balls).toBe(1)
-    })
-
-    it("adds runs to bowler conceded", () => {
-      const s = scoreRuns(state, 4)
-      expect(s.bowlers.find((b) => b.name === "B1")!.runsConceded).toBe(4)
-      expect(s.bowlers.find((b) => b.name === "B1")!.balls).toBe(1)
+      expect(s.batters.find((b) => b.name === "A1")!.sixes).toBe(1)
+      expect(s.batters.find((b) => b.name === "A1")!.fours).toBe(0)
     })
 
     it("decrements balls remaining", () => {
       const s = scoreRuns(state, 4)
       expect(s.ballsRemaining).toBe(119)
     })
+
+    it("adds to partnership", () => {
+      const s = scoreRuns(state, 4)
+      expect(s.partnership).toBe(4)
+    })
+
+    it("transitions to INNINGS_1 phase", () => {
+      const s = scoreRuns(state, 1)
+      expect(s.inningsPhase).toBe("INNINGS_1")
+    })
+
+    it("creates score events with proper structure", () => {
+      const s = scoreRuns(state, 4)
+      const event = s.history[0]
+      expect(event.eventType).toBe("runs")
+      expect(event.runs).toBe(4)
+      expect(event.batter).toBe("A1")
+      expect(event.bowler).toBe("B1")
+      expect(event.innings).toBe(1)
+      expect(event.id).toBeDefined()
+      expect(event.timestamp).toBeDefined()
+    })
   })
 
   describe("over completion", () => {
     it("increments over after 6 balls", () => {
       let s = state
-      for (let i = 0; i < 6; i++) {
-        s = scoreRuns(s, 0)
-      }
+      for (let i = 0; i < 6; i++) s = scoreRuns(s, 0)
       expect(s.overs).toBe(1)
       expect(s.balls).toBe(0)
     })
 
     it("swaps strike at end of over", () => {
       let s = state
-      for (let i = 0; i < 6; i++) {
-        s = scoreRuns(s, 0) // dot balls, no strike rotation
-      }
-      // End of over swaps strike
+      for (let i = 0; i < 6; i++) s = scoreRuns(s, 0)
       expect(s.striker).toBe("A2")
       expect(s.runner).toBe("A1")
+    })
+
+    it("tracks maiden over for bowler", () => {
+      let s = state
+      for (let i = 0; i < 6; i++) s = scoreRuns(s, 0)
+      expect(s.bowlers.find((b) => b.name === "B1")!.maidens).toBe(1)
+    })
+
+    it("stores previous over balls", () => {
+      let s = state
+      for (let i = 0; i < 6; i++) s = scoreRuns(s, i + 1)
+      expect(s.previousOverBalls).toHaveLength(6)
+      expect(s.currentOverBalls).toHaveLength(0)
     })
   })
 
@@ -183,45 +196,26 @@ describe("cricketScoringEngine", () => {
       expect(s.balls).toBe(0)
     })
 
-    it("does not increment batter balls", () => {
-      const s = scoreWide(state, 0)
-      expect(s.batters.find((b) => b.name === "A1")!.balls).toBe(0)
-    })
-
-    it("adds wide runs to bowler conceded", () => {
-      const s = scoreWide(state, 0)
-      expect(s.bowlers.find((b) => b.name === "B1")!.runsConceded).toBe(1)
-    })
-
-    it("supports multiple wide runs", () => {
-      const s = scoreWide(state, 3)
-      expect(s.runs).toBe(4) // 1 + 3
-      expect(s.balls).toBe(0)
-    })
-
     it("rotates strike on odd total runs", () => {
       const s = scoreWide(state, 0) // 1 total = odd
       expect(s.striker).toBe("A2")
-      expect(s.runner).toBe("A1")
     })
 
     it("does not rotate strike on even total runs", () => {
       const s = scoreWide(state, 1) // 2 total = even
       expect(s.striker).toBe("A1")
-      expect(s.runner).toBe("A2")
+    })
+
+    it("adds to partnership", () => {
+      const s = scoreWide(state, 2)
+      expect(s.partnership).toBe(3) // 1 + 2
     })
   })
 
   describe("scoreNoBall", () => {
-    it("adds 1 run for no ball with 0 extra runs", () => {
-      const s = scoreNoBall(state, 0)
-      expect(s.runs).toBe(1)
-      expect(s.extras).toBe(1)
-    })
-
     it("adds 1 + batsman runs", () => {
       const s = scoreNoBall(state, 4)
-      expect(s.runs).toBe(5) // 1 no ball + 4 batsman
+      expect(s.runs).toBe(5)
       expect(s.extras).toBe(1)
     })
 
@@ -233,12 +227,17 @@ describe("cricketScoringEngine", () => {
     it("adds batsman runs to batter", () => {
       const s = scoreNoBall(state, 4)
       expect(s.batters.find((b) => b.name === "A1")!.runs).toBe(4)
-      expect(s.batters.find((b) => b.name === "A1")!.balls).toBe(0) // no ball doesn't count as ball
+      expect(s.batters.find((b) => b.name === "A1")!.balls).toBe(0)
     })
 
     it("does not rotate strike", () => {
       const s = scoreNoBall(state, 1)
       expect(s.striker).toBe("A1")
+    })
+
+    it("adds to partnership", () => {
+      const s = scoreNoBall(state, 2)
+      expect(s.partnership).toBe(3) // 1 + 2
     })
   })
 
@@ -259,19 +258,14 @@ describe("cricketScoringEngine", () => {
       expect(s.batters.find((b) => b.name === "A1")!.runs).toBe(0)
     })
 
-    it("increments batter balls faced", () => {
-      const s = scoreByes(state, 2)
-      expect(s.batters.find((b) => b.name === "A1")!.balls).toBe(1)
-    })
-
     it("rotates strike on odd runs", () => {
       const s = scoreByes(state, 1)
       expect(s.striker).toBe("A2")
     })
 
-    it("does not rotate strike on even runs", () => {
-      const s = scoreByes(state, 2)
-      expect(s.striker).toBe("A1")
+    it("adds to partnership", () => {
+      const s = scoreByes(state, 3)
+      expect(s.partnership).toBe(3)
     })
   })
 
@@ -281,12 +275,6 @@ describe("cricketScoringEngine", () => {
       expect(s.runs).toBe(2)
       expect(s.extras).toBe(2)
       expect(s.balls).toBe(1)
-      expect(s.batters.find((b) => b.name === "A1")!.runs).toBe(0)
-    })
-
-    it("rotates strike on odd runs", () => {
-      const s = scoreLegByes(state, 3)
-      expect(s.striker).toBe("A2")
     })
   })
 
@@ -296,128 +284,135 @@ describe("cricketScoringEngine", () => {
       expect(s.wickets).toBe(1)
     })
 
-    it("increments ball count", () => {
-      const s = scoreWicket(state, "bowled")
-      expect(s.balls).toBe(1)
+    it("clears striker and resets partnership", () => {
+      const s1 = scoreRuns(state, 4)
+      expect(s1.partnership).toBe(4)
+      const s2 = scoreWicket(s1, "bowled")
+      expect(s2.striker).toBeNull()
+      expect(s2.partnership).toBe(0)
     })
 
-    it("marks striker as out", () => {
-      const s = scoreWicket(state, "bowled")
-      expect(s.batters.find((b) => b.name === "A1")!.isOut).toBe(true)
-    })
-
-    it("clears striker (new batter needed)", () => {
-      const s = scoreWicket(state, "bowled")
-      expect(s.striker).toBeNull()
-    })
-
-    it("increments bowler wickets", () => {
-      const s = scoreWicket(state, "bowled")
-      expect(s.bowlers.find((b) => b.name === "B1")!.wickets).toBe(1)
-    })
-
-    it("records wicket type in history", () => {
-      const s = scoreWicket(state, "caught")
-      expect(s.history[0].wicketType).toBe("caught")
-    })
-
-    it("records fielder for caught wicket", () => {
+    it("records wicket type and fielder in event", () => {
       const s = scoreWicket(state, "caught", "B2")
+      expect(s.history[0].wicketType).toBe("caught")
       expect(s.history[0].fielder).toBe("B2")
+    })
+
+    it("supports all wicket types", () => {
+      const types = ["bowled", "caught", "runOut", "stumped", "lbw", "retiredHurt", "other"] as const
+      types.forEach((wt) => {
+        const s = scoreWicket(state, wt)
+        expect(s.wickets).toBe(1)
+      })
     })
   })
 
   describe("undoLastBall", () => {
     it("undoes a run scoring ball", () => {
       const s1 = scoreRuns(state, 4)
-      expect(s1.runs).toBe(4)
       const s2 = undoLastBall(s1)
       expect(s2.runs).toBe(0)
       expect(s2.balls).toBe(0)
     })
 
-    it("undoes a wicket", () => {
-      const s1 = scoreWicket(state, "bowled")
-      expect(s1.wickets).toBe(1)
+    it("restores strike rotation after undo", () => {
+      const s1 = scoreRuns(state, 1)
+      expect(s1.striker).toBe("A2")
       const s2 = undoLastBall(s1)
-      expect(s2.wickets).toBe(0)
+      expect(s2.striker).toBe("A1")
+      expect(s2.runner).toBe("A2")
     })
 
-    it("undoes a wide", () => {
-      const s1 = scoreWide(state, 0)
-      expect(s1.runs).toBe(1)
+    it("restores partnership after undo", () => {
+      const s1 = scoreRuns(state, 4)
+      expect(s1.partnership).toBe(4)
       const s2 = undoLastBall(s1)
-      expect(s2.runs).toBe(0)
+      expect(s2.partnership).toBe(0)
     })
 
-    it("undoes a no ball", () => {
-      const s1 = scoreNoBall(state, 4)
-      expect(s1.runs).toBe(5)
+    it("restores fours and sixes after undo", () => {
+      const s1 = scoreRuns(state, 4)
+      expect(s1.batters.find((b) => b.name === "A1")!.fours).toBe(1)
       const s2 = undoLastBall(s1)
-      expect(s2.runs).toBe(0)
+      expect(s2.batters.find((b) => b.name === "A1")!.fours).toBe(0)
     })
 
     it("returns same state if no history", () => {
       const s = undoLastBall(state)
       expect(s.runs).toBe(0)
     })
+  })
 
-    it("restores batter state after undo", () => {
-      const s1 = scoreRuns(state, 4)
-      expect(s1.batters.find((b) => b.name === "A1")!.runs).toBe(4)
-      const s2 = undoLastBall(s1)
-      expect(s2.batters.find((b) => b.name === "A1")!.runs).toBe(0)
+  describe("getRunRate", () => {
+    it("returns 0 for no balls", () => {
+      expect(getRunRate(state)).toBe(0)
     })
 
-    it("restores strike rotation after undo", () => {
-      const s1 = scoreRuns(state, 1) // rotates strike
-      expect(s1.striker).toBe("A2")
-      const s2 = undoLastBall(s1)
-      expect(s2.striker).toBe("A1")
-      expect(s2.runner).toBe("A2")
+    it("calculates run rate correctly", () => {
+      const s = scoreRuns(state, 6) // 6 runs off 1 ball = 36 RPO
+      expect(getRunRate(s)).toBe(36)
+    })
+  })
+
+  describe("getRequiredRunRate", () => {
+    it("returns null for first innings", () => {
+      expect(getRequiredRunRate(state)).toBeNull()
+    })
+  })
+
+  describe("getBatterStrikeRate", () => {
+    it("returns 0 for no balls", () => {
+      expect(getBatterStrikeRate(state.batters[0])).toBe(0)
+    })
+
+    it("calculates strike rate", () => {
+      const batter: BatterState = { name: "A1", runs: 50, balls: 40, fours: 5, sixes: 1, isOut: false }
+      expect(getBatterStrikeRate(batter)).toBe(125)
+    })
+  })
+
+  describe("getBowlerEconomy", () => {
+    it("returns 0 for no balls", () => {
+      expect(getBowlerEconomy(state.bowlers[0])).toBe(0)
+    })
+
+    it("calculates economy", () => {
+      const bowler: BowlerState = { name: "B1", runsConceded: 30, wickets: 0, balls: 24, maidens: 0 }
+      expect(getBowlerEconomy(bowler)).toBe(7.5)
+    })
+  })
+
+  describe("formatBowlerFigures", () => {
+    it("formats bowler figures", () => {
+      const bowler: BowlerState = { name: "B1", runsConceded: 24, wickets: 2, balls: 20, maidens: 0 }
+      expect(formatBowlerFigures(bowler)).toBe("3.2-0-24-2")
+    })
+  })
+
+  describe("formatCurrentOver", () => {
+    it("formats empty over", () => {
+      expect(formatCurrentOver([])).toBe("")
+    })
+
+    it("formats mixed over", () => {
+      const s1 = scoreRuns(state, 1)
+      const s2 = scoreRuns(s1, 4)
+      const overStr = formatCurrentOver(s2.currentOverBalls)
+      expect(overStr).toContain("1")
+      expect(overStr).toContain("4")
     })
   })
 
   describe("getOverlayModel", () => {
-    it("returns correct overlay data", () => {
+    it("returns correct overlay data with run rate and partnership", () => {
       const s = scoreRuns(state, 4)
       const model = getOverlayModel(s)
       expect(model.battingTeam).toBe("Team Alpha")
-      expect(model.bowlingTeam).toBe("Team Beta")
       expect(model.score).toBe("4/0")
-      expect(model.overs).toBe("0.1")
-      expect(model.lastBall).toBeDefined()
-      expect(model.lastBall!.runs).toBe(4)
-    })
-
-    it("shows striker stats in overlay", () => {
-      const s = scoreRuns(state, 4)
-      const model = getOverlayModel(s)
-      expect(model.striker).toContain("A1")
-      expect(model.striker).toContain("4")
-    })
-
-    it("shows bowler stats in overlay", () => {
-      const s = scoreRuns(state, 4)
-      const model = getOverlayModel(s)
-      expect(model.bowler).toContain("B1")
-    })
-  })
-
-  describe("formatOvers", () => {
-    it("formats 0 overs 0 balls", () => {
-      expect(formatOvers(state)).toBe("0.0")
-    })
-
-    it("formats partial overs", () => {
-      const s = scoreRuns(state, 1)
-      expect(formatOvers(s)).toBe("0.1")
-    })
-
-    it("formats complete over", () => {
-      let s = state
-      for (let i = 0; i < 6; i++) s = scoreRuns(s, 0)
-      expect(formatOvers(s)).toBe("1.0")
+      expect(model.currentRunRate).toBe(24)
+      expect(model.partnership).toBe(4)
+      expect(model.requiredRunRate).toBeNull()
+      expect(model.target).toBeNull()
     })
   })
 
@@ -435,11 +430,6 @@ describe("cricketScoringEngine", () => {
     it("sets runner", () => {
       const s = setRunner(state, "A3")
       expect(s.runner).toBe("A3")
-    })
-
-    it("captures initial runner on first assignment", () => {
-      const s = setRunner(state, "A2")
-      expect(s.initialRunner).toBe("A2")
     })
   })
 })

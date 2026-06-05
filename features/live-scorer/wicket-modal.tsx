@@ -23,15 +23,15 @@ interface WicketModalProps {
   onUpdatePlayerName: (playerId: string, name: string) => void
 }
 
-const WICKET_TYPES: { value: WicketType; label: string }[] = [
-  { value: "bowled", label: "Bowled" },
-  { value: "caught", label: "Caught" },
-  { value: "runOut", label: "Run Out" },
-  { value: "stumped", label: "Stumped" },
-  { value: "other", label: "Other" },
+const WICKET_TYPES: { value: WicketType; label: string; needsFielder: boolean }[] = [
+  { value: "bowled", label: "Bowled", needsFielder: false },
+  { value: "caught", label: "Caught", needsFielder: true },
+  { value: "runOut", label: "Run Out", needsFielder: true },
+  { value: "stumped", label: "Stumped", needsFielder: true },
+  { value: "lbw", label: "LBW", needsFielder: false },
+  { value: "retiredHurt", label: "Retired Hurt", needsFielder: false },
+  { value: "other", label: "Other", needsFielder: false },
 ]
-
-const WICKET_TYPES_NEED_FIELDER: WicketType[] = ["caught", "runOut", "stumped"]
 
 export function WicketModal({ scoringState, playerNames, onConfirm, onCancel, onUpdatePlayerName }: WicketModalProps) {
   const [wicketType, setWicketType] = useState<WicketType | null>(null)
@@ -40,9 +40,8 @@ export function WicketModal({ scoringState, playerNames, onConfirm, onCancel, on
   const [fielderNameInput, setFielderNameInput] = useState("")
   const [batterNameInput, setBatterNameInput] = useState("")
 
-  const needsFielder = wicketType && WICKET_TYPES_NEED_FIELDER.includes(wicketType)
-  const isBowled = wicketType === "bowled"
-  const isOther = wicketType === "other"
+  const selectedType = WICKET_TYPES.find((wt) => wt.value === wicketType)
+  const needsFielder = selectedType?.needsFielder ?? false
 
   // Available fielders from bowling team (for caught/stumped) or batting team (for run out)
   const fielderPlayers = wicketType === "runOut"
@@ -69,7 +68,6 @@ export function WicketModal({ scoringState, playerNames, onConfirm, onCancel, on
   const handleConfirm = () => {
     if (!wicketType) return
     if (needsFielder && !fielder) return
-    if (!isBowled && !isOther && !fielder) return
     onConfirm(wicketType, fielder, newBatter)
   }
 

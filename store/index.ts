@@ -10,8 +10,9 @@ import type {
   OverlayScoreModel,
   LiveScorerPhase,
   GameType,
+  ExpandedPanel,
 } from "@/types"
-import { saveMatchSetup, saveScoringState, clearMatchSetup, clearScoringState, loadMatchSetup, loadScoringState } from "@/lib/live-scorer-storage"
+import { saveLiveMatch, loadLiveMatch, clearLiveMatch } from "@/lib/live-scorer-storage"
 import { createInitialScoringState, getOverlayModel } from "@/services/cricket-scoring-engine"
 
 interface DirectorStore {
@@ -31,6 +32,9 @@ interface DirectorStore {
 
   // Overlay state
   overlayVisible: boolean
+
+  // Panel expansion state
+  expandedPanel: ExpandedPanel
 
   // Live Scorer state
   liveScorerPhase: LiveScorerPhase
@@ -65,6 +69,9 @@ interface DirectorStore {
   toggleOverlay: () => void
   setOverlayVisible: (visible: boolean) => void
 
+  // Actions - Panel expansion
+  setExpandedPanel: (panel: ExpandedPanel) => void
+
   // Actions - Live Scorer
   setLiveScorerPhase: (phase: LiveScorerPhase) => void
   saveMatchSetupData: (data: MatchSetupData) => void
@@ -73,6 +80,7 @@ interface DirectorStore {
   resetScorer: () => void
   getOverlayScoreModel: () => OverlayScoreModel | null
   updatePlayerName: (playerId: string, name: string) => void
+  restoreMatch: (data: { matchSetup: MatchSetupData; scoringState: ScoringState; liveScorerPhase: LiveScorerPhase }) => void
 
   // Actions - Broadcast
   setBroadcastState: (state: Partial<BroadcastState>) => void
@@ -99,6 +107,12 @@ const initialBroadcastState: BroadcastState = {
   ],
 }
 
+function persistState(matchSetup: MatchSetupData | null, scoringState: ScoringState | null, liveScorerPhase: LiveScorerPhase) {
+  if (!matchSetup || !scoringState) return
+  const overlayState = getOverlayModel(scoringState)
+  saveLiveMatch({ matchSetup, scoringState, liveScorerPhase, overlayState })
+}
+
 export const useDirectorStore = create<DirectorStore>((set, get) => ({
   // Initial camera state
   activeCameraId: null,
@@ -116,6 +130,9 @@ export const useDirectorStore = create<DirectorStore>((set, get) => ({
 
   // Overlay state
   overlayVisible: true,
+
+  // Panel expansion state
+  expandedPanel: "none",
 
   // Initial Live Scorer state
   liveScorerPhase: "setup",
@@ -200,25 +217,29 @@ export const useDirectorStore = create<DirectorStore>((set, get) => ({
   toggleOverlay: () => set((state) => ({ overlayVisible: !state.overlayVisible })),
   setOverlayVisible: (visible) => set(() => ({ overlayVisible: visible })),
 
+  // Panel expansion
+  setExpandedPanel: (panel) =>
+    set(() => ({ expandedPanel: panel })),
+
   // Live Scorer actions
   setLiveScorerPhase: (phase) =>
     set(() => ({ liveScorerPhase: phase })),
 
   saveMatchSetupData: (data) => {
-    saveMatchSetup(data)
+    persistState(data, get().scoringState, get().liveScorerPhase)
     set(() => ({ matchSetup: data }))
   },
 
-  setScoringState: (state) => {
-    saveScoringState(state)
-    set(() => ({ scoringState: state }))
+  setScoringState: (scoringState) => {
+    persistState(get().matchSetup, scoringState, get().liveScorerPhase)
+    set(() => ({ scoringState }))
   },
 
   startScoring: () => {
     const { matchSetup } = get()
     if (!matchSetup) return
     const state = createInitialScoringState(matchSetup)
-    saveScoringState(state)
+    persistState(matchSetup, state, "playerSelect")
     set(() => ({
       scoringState: state,
       liveScorerPhase: "playerSelect",
@@ -226,8 +247,7 @@ export const useDirectorStore = create<DirectorStore>((set, get) => ({
   },
 
   resetScorer: () => {
-    clearMatchSetup()
-    clearScoringState()
+    clearLiveMatch()
     set(() => ({
       matchSetup: null,
       scoringState: null,
@@ -247,21 +267,19 @@ export const useDirectorStore = create<DirectorStore>((set, get) => ({
 
     const updatedNames = { ...matchSetup.playerNames, [playerId]: name }
     const updatedSetup = { ...matchSetup, playerNames: updatedNames }
-    saveMatchSetup(updatedSetup)
     set(() => ({ matchSetup: updatedSetup }))
 
-    // Also update scoring state batter/bowler names if they reference this player
     if (scoringState) {
-      const updatedBatters = scoringState.batters.map((b) =>
-        b.name === playerId ? b : b
-      )
-      const updatedBowlers = scoringState.bowlers.map((b) =>
-        b.name === playerId ? b : b
-      )
-      const updatedScoring = { ...scoringState, batters: updatedBatters, bowlers: updatedBowlers }
-      saveScoringState(updatedScoring)
-      set(() => ({ scoringState: updatedScoring }))
+      persistState(updatedSetup, scoringState, get().liveScorerPhase)
     }
+  },
+
+  restoreMatch: (data) => {
+    set(() => ({
+      matchSetup: data.matchSetup,
+      scoringState: data.scoringState,
+      liveScorerPhase: data.liveScorerPhase,
+    }))
   },
 
   // Broadcast actions

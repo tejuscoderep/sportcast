@@ -58,7 +58,9 @@ export type PlayHQConnectionStatus = "disconnected" | "connecting" | "connected"
 // Live Scorer types
 export type GameType = "Cricket" | "Basketball" | "Netball" | "AFL"
 
-export type WicketType = "bowled" | "caught" | "runOut" | "stumped" | "other"
+export type WicketType = "bowled" | "caught" | "runOut" | "stumped" | "lbw" | "retiredHurt" | "other"
+
+export type InningsPhase = "SETUP" | "READY" | "INNINGS_1" | "INNINGS_BREAK" | "INNINGS_2" | "COMPLETED"
 
 export interface MatchSetupData {
   venue: string
@@ -76,6 +78,8 @@ export interface BatterState {
   name: string
   runs: number
   balls: number
+  fours: number
+  sixes: number
   isOut: boolean
 }
 
@@ -84,6 +88,22 @@ export interface BowlerState {
   runsConceded: number
   wickets: number
   balls: number
+  maidens: number
+}
+
+export interface ScoreEvent {
+  id: string
+  timestamp: number
+  innings: number
+  over: number
+  ball: number
+  eventType: "runs" | "wide" | "noBall" | "byes" | "legByes" | "wicket"
+  runs: number
+  extras: number
+  wicketType?: WicketType
+  fielder?: string
+  batter: string | null
+  bowler: string | null
 }
 
 export interface ScoringState {
@@ -100,32 +120,21 @@ export interface ScoringState {
   currentBowler: string | null
   batters: BatterState[]
   bowlers: BowlerState[]
-  currentOverBalls: BallEvent[]
-  history: BallEvent[]
+  currentOverBalls: ScoreEvent[]
+  previousOverBalls: ScoreEvent[]
+  history: ScoreEvent[]
   initialStriker: string | null
   initialRunner: string | null
   initialBowler: string | null
   inningsNumber: number
-  firstInningsScore: number | null
+  inningsPhase: InningsPhase
+  firstInningsRuns: number
+  firstInningsWickets: number
   firstInningsOvers: number
   firstInningsBalls: number
-  firstInningsWickets: number
-  firstInningsRuns: number
   isSecondInnings: boolean
   ballsRemaining: number
-  inningsEnded: boolean
-}
-
-export interface BallEvent {
-  type: "runs" | "wide" | "noBall" | "byes" | "legByes" | "wicket"
-  runs: number
-  batter?: string
-  bowler?: string
-  isExtra: boolean
-  extraType?: "wide" | "noBall" | "byes" | "legByes"
-  dismissedBatter?: string
-  wicketType?: WicketType
-  fielder?: string
+  partnership: number
 }
 
 export interface OverlayScoreModel {
@@ -137,10 +146,24 @@ export interface OverlayScoreModel {
   striker: string | null
   nonStriker: string | null
   bowler: string | null
-  lastBall: BallEvent | null
+  currentRunRate: number
+  requiredRunRate: number | null
+  target: number | null
+  partnership: number
+  lastBall: ScoreEvent | null
 }
 
 export type LiveScorerPhase = "setup" | "playerSelect" | "scoring"
+
+export type ExpandedPanel = "none" | "playhq" | "liveScorer"
+
+// Persisted live match state
+export interface LiveMatchPersisted {
+  matchSetup: MatchSetupData
+  scoringState: ScoringState
+  liveScorerPhase: LiveScorerPhase
+  overlayState: OverlayScoreModel | null
+}
 
 // Score types (legacy, kept for ScoreOverlay compat)
 export interface MatchData {
